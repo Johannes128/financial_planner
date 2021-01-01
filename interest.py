@@ -105,7 +105,7 @@ class History(HistoryBase):
       self.total_rate_start = loan.last().total_rate
       self.calculate()
 
-  def get_all_year_entries(self, rel_month):
+  def get_current_year_entries(self, rel_month):
     cur_year_start_idx = (rel_month - 1) // 12 * 12 + 1  # TODO: respect start month in year
     return [self[i] for i in range(cur_year_start_idx, len(self))]
 
@@ -122,7 +122,7 @@ class History(HistoryBase):
         current_rate = value
         value = 0.00
     else: # this is a savings plan
-      cur_year_interest = sum(e.interest for e in self.get_all_year_entries(rel_month)) + current_interest
+      cur_year_interest = sum(e.interest for e in self.get_current_year_entries(rel_month)) + current_interest
       value_for_tax = min(max(0.00, cur_year_interest - self.tax_free), current_interest)
       tax = -self.tax_rate * value_for_tax
       value += tax
