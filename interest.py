@@ -1,6 +1,8 @@
 import itertools
 import tabulate
 import copy
+import csv
+import time
 
 class HistoryEntry:
   def __init__(self, V_start, rate, interest, month, total_interest=0.00, total_rate=0.00,
@@ -115,12 +117,12 @@ class History(HistoryBase):
   def __init__(self, V_0, p_year, rate,
                years=None, month_offset = 0,
                total_interest_start=0.00, total_rate_start=0.00,
-               tax_rate=0.26375, tax_free=1_602.00):
+               tax_rate=0.26375, tax_free=1_602.00,
+               payment_at_period_start=True):
     super().__init__(V_0, month_offset, total_interest_start, total_rate_start)
 
     self.V_0 = V_0
     self.p_year = p_year
-    self.p_month = self.get_p_month()
 
     self.rate = rate
 
@@ -133,11 +135,16 @@ class History(HistoryBase):
     self.tax_rate = tax_rate
     self.tax_free = tax_free
 
+    self.payment_at_period_start = payment_at_period_start
+
     if self.V_0 is not None:
       self.calculate()
 
-  def get_p_month(self):
+  def get_p_month(self, abs_month):
     return self.p_year/12
+
+  def get_grow_factor(self, abs_month):
+    return 1.0 + self.get_p_month(abs_month) / 100
 
   def continue_history(self, loan=None):
     if loan is not None:
@@ -151,26 +158,41 @@ class History(HistoryBase):
     cur_year_start_idx = (rel_month - 1) // 12 * 12 + 1  # TODO: respect start month in year
     return [self[i] for i in range(cur_year_start_idx, len(self))]
 
-  def month_step(self, rel_month, abs_month, max_months):
+  def get_value_rate_interest(self, abs_month):
     value = self.last().V_end
-    current_interest = value * self.p_month / 100
-    value += current_interest
+    rate = self.rate
 
-    current_rate = self.rate
-    value += self.rate
+    intial_value = value
+    if self.payment_at_period_start:
+      value += rate
+      value_start = value
+      value *= self.get_grow_factor(abs_month)
+      interest = value - value_start
+    else:
+      value_start = value
+      value *= self.get_grow_factor(abs_month)
+      interest = value - value_start
+      value += rate
+
+    return intial_value, value, rate, interest
+
+  def month_step(self, rel_month, abs_month, max_months):
+    initial_value, value, rate, interest = self.get_value_rate_interest(abs_month)
+
     if self.V_0 < 0: # this is a loan
       tax = 0.00
-      if value + self.rate >= 0:
-        current_rate = value
+      if value >= 0:
+        rate = -initial_value
         value = 0.00
     else: # this is a savings plan
-      cur_year_interest = sum(e.interest for e in self.get_current_year_entries(rel_month)) + current_interest
-      value_for_tax = min(max(0.00, cur_year_interest - self.tax_free), current_interest)
+      cur_year_interest = sum(e.interest for e in self.get_current_year_entries(rel_month))
+      cur_year_interest += interest
+      value_for_tax = min(max(0.00, cur_year_interest - self.tax_free), interest)
       tax = -self.tax_rate * value_for_tax
       value += tax
 
     self.append(HistoryEntry(0.00 if len(self) == 0 else self.last().V_end,
-                             current_rate, current_interest, abs_month, tax=tax, V_end=value))
+                             rate, interest, abs_month, tax=tax, V_end=value))
 
     if max_months is not None and abs_month - self.month_offset >= max_months:
       return False
@@ -203,7 +225,7 @@ class SavingsPlan(History):
 class StocksSavingsPlan(History):
   # TODO: also respect dividends
 
-  def get_p_month(self):
+  def get_p_month(self, abs_month):
     return ( (1+self.p_year/100) ** (1/12) - 1 ) * 100
 
   def month_step(self, rel_month, abs_month, max_months):
@@ -211,17 +233,10 @@ class StocksSavingsPlan(History):
     self.part_relevant_for_tax = 0.7
     self.basis_interest = 0.5 / 100 * 0.7
 
-
-    # TODO: distinguish time of payment (beginning vs. end)
-    value = self.last().V_end + self.rate
-    current_interest = value * self.p_month / 100
-    value += current_interest
-
-    current_rate = self.rate
-    #value += self.rate
+    initial_value, value, rate, interest = self.get_value_rate_interest(abs_month)
 
     self.append(HistoryEntry(0.00 if len(self) == 0 else self.last().V_end,
-                             current_rate, current_interest, abs_month, V_end=value))
+                             rate, interest, abs_month, V_end=value))
 
     # at the end of year, calculate tax
     year_entries = self.get_current_year_entries(rel_month)
@@ -234,13 +249,13 @@ class StocksSavingsPlan(History):
       vorabpauschale_rates = sum((12.0-i)/12 * e.rate for i,e in enumerate(year_entries, start=0)) * self.basis_interest
       vorabpauschale = vorabpauschale_begin + vorabpauschale_rates
 
-      V_for_tax = min(vorabpauschale, cur_year_interest)
+      V_for_tax = min(vorabpauschale, max(0.00, cur_year_interest))
       V_part_for_tax = V_for_tax * self.part_relevant_for_tax
       tax = -max(0.00, V_part_for_tax - self.tax_free) * self.tax_rate
 
       del self[-1]
       self.append(HistoryEntry(0.00 if len(self) == 0 else self.last().V_end,
-                               current_rate, current_interest, abs_month, V_end=value,
+                               rate, interest, abs_month, V_end=value,
                                tax=tax, V_for_tax=V_for_tax, vorabpauschale=vorabpauschale))
 
     last = self.last()
@@ -280,6 +295,22 @@ class StocksSavingsPlan(History):
             e.tax, e.total_tax, e.V_to_tax, e.tax_on_sell,
             e.V_after_tax, e.gain_after_tax]
   # ^^^^^ printing methods ^^^^^
+
+
+with open("data/MSCI_World_Performance.csv") as f:
+  def parse_line(l):
+    return [time.strptime(l[0], "%Y-%m-%d"), float(l[1])]
+  msci_world_data = [parse_line(l) for i,l in enumerate(csv.reader(f, delimiter=";")) if i > 0]
+
+
+class StocksSavingsPlanDataBased(StocksSavingsPlan):
+  def get_p_month(self, abs_month):
+    raise ValueError("Should not be called")
+
+  def get_grow_factor(self, abs_month):
+    abs_month += 12*30 # TODO: define offset somewhere else
+    value_start, value_end = msci_world_data[abs_month][1], msci_world_data[abs_month+1][1]
+    return value_end/value_start
 
 
 class Chain:
@@ -330,9 +361,9 @@ class FinancialPlan:
 #Chain(SavingsPlan(10_000.00, 1.00, 100.00, 10),
 #      SavingsPlan(None, 1.01, 1001.00, 10)).print_years()
 
-StocksSavingsPlan(45_000.00, 5.0, 710.00, 15, tax_free=1602.00).print_years()
+StocksSavingsPlanDataBased(45_000.00, 0.0, 710.00, 15, tax_free=1602.00).print_years()
 
-AnnuityLoan(-345_450.00, 1.28, 938.00, 15).print_years()
+#AnnuityLoan(-409_200.00, 1.25, 1_098.00, 20, payment_at_period_start=True).print_years()
 
 if False:
   month_budget = 2_000.00
