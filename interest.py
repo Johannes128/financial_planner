@@ -267,6 +267,13 @@ class SavingsPlan(History):
 class StocksSavingsPlan(History):
   # TODO: also respect dividends
 
+  def __init__(self, *args, basis_interest=0.5, **kwargs):
+    self.part_relevant_for_tax = 0.7
+    self.basis_interest = basis_interest
+    self.basis_interest_factor = self.basis_interest / 100 * 0.7
+
+    super().__init__(*args, **kwargs)
+
   def get_p_month(self, abs_month):
     return ( (1+self.p_year/100) ** (1/12) - 1 ) * 100
 
@@ -278,8 +285,8 @@ class StocksSavingsPlan(History):
       cur_year_rate = sum(e.rate for e in year_entries)
       value_at_beginning = year_entries[-1].V_end - cur_year_interest - cur_year_rate
 
-      vorabpauschale_begin = value_at_beginning * self.basis_interest
-      vorabpauschale_rates = sum((12.0 - i) / 12 * e.rate for i, e in enumerate(year_entries, start=0)) * self.basis_interest
+      vorabpauschale_begin = value_at_beginning * self.basis_interest_factor
+      vorabpauschale_rates = sum((12.0 - i) / 12 * e.rate for i, e in enumerate(year_entries, start=0)) * self.basis_interest_factor
       vorabpauschale = vorabpauschale_begin + vorabpauschale_rates
 
       V_for_tax = min(vorabpauschale, max(0.00, cur_year_interest))
@@ -296,10 +303,6 @@ class StocksSavingsPlan(History):
     super().update_year_summaries(rel_month, abs_month, finished)
 
   def add_sell_tax(self, entry):
-    # TODO: move to constructor
-    self.part_relevant_for_tax = 0.7
-    self.basis_interest = 0.5 / 100 * 0.7
-
     tax_paid = sum(e.tax for e in self[:-1])
     V_tax_paid = sum(e.V_for_tax for e in self[:-1])
     entry.V_to_tax = entry.V_end - self[0].V_end - entry.total_rate - V_tax_paid
