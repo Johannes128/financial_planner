@@ -298,11 +298,11 @@ class StocksSavingsPlan(History):
                                last_entry.rate, last_entry.interest, abs_month,
                                V_end=last_entry.V_end,
                                tax=tax, V_for_tax=V_for_tax, vorabpauschale=vorabpauschale))
-      self.add_sell_tax(self.last())
+      self.add_sell_tax_to_entry(self.last())
 
     super().update_year_summaries(rel_month, abs_month, finished)
 
-  def add_sell_tax(self, entry):
+  def add_sell_tax_to_entry(self, entry):
     tax_paid = sum(e.tax for e in self[:-1])
     V_tax_paid = sum(e.V_for_tax for e in self[:-1])
     entry.V_to_tax = entry.V_end - self[0].V_end - entry.total_rate - V_tax_paid
@@ -317,7 +317,7 @@ class StocksSavingsPlan(History):
     self.append(HistoryEntry(0.00 if len(self) == 0 else self.last().V_end,
                              rate, interest, abs_month, V_end=value))
 
-    self.add_sell_tax(self.last())
+    self.add_sell_tax_to_entry(self.last())
 
     finished = False
     if max_months is not None and abs_month - self.month_offset >= max_months:
