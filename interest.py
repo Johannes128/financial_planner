@@ -196,24 +196,16 @@ class History(HistoryBase):
     last_entry = self.last()
     if (rel_month != 1 and round(last_entry.year) == last_entry.year) or finished:
       year_entries = self.get_current_year_entries(rel_month)
-      self.year_summaries.append(HistoryEntry(
-        V_start=year_entries[0].V_start,
-        V_end=year_entries[-1].V_end,
-        rate=sum(e.rate for e in year_entries),
-        total_rate=year_entries[-1].total_rate,
-        interest=sum(e.interest for e in year_entries),
-        total_interest=year_entries[-1].total_interest,
-        tax=sum(e.tax for e in year_entries),
-        total_tax=year_entries[-1].total_tax,
-        month=year_entries[-1].month,
-        V_to_tax=year_entries[-1].V_to_tax,
-        V_for_tax=year_entries[-1].V_for_tax,
-        V_after_tax=year_entries[-1].V_after_tax,
-        tax_on_sell=year_entries[-1].tax_on_sell,
-        gain_after_tax=year_entries[-1].gain_after_tax,
-        vorabpauschale=year_entries[-1].vorabpauschale,
-      ))
+
+      entry = copy.deepcopy(year_entries[-1])
+      entry.V_start = year_entries[0].V_start
+      entry.rate = sum(e.rate for e in year_entries)
+      entry.interest = sum(e.interest for e in year_entries)
+      entry.tax = sum(e.tax for e in year_entries)
+
+      self.year_summaries.append(entry)
       return True
+
     return False
 
   def month_step(self, rel_month, abs_month, max_months):
