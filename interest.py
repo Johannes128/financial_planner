@@ -1,8 +1,11 @@
 import itertools
-import tabulate
 import copy
 import csv
+import pprint
 import time
+
+import tabulate
+
 
 class HistoryEntry:
   def __init__(self, V_start, rate, interest, month, total_interest=0.00, total_rate=0.00,
@@ -33,14 +36,22 @@ class HistoryEntry:
     else:
       return self.V_end
 
+  def __str__(self):
+    return "HistoryEntry({})".format(", ".join(f"{k}={v}" for k,v in self.__dict__.items()))
+
+  def __repr__(self):
+    return str(self)
+
 
 class HistoryBase(list):
   def __init__(self, V_0, month_offset=0, total_interest_start=0.00, total_rate_start=0.00):
     super().__init__()
+    self.year_summaries = []
     self.restart(V_0, month_offset, total_interest_start, total_rate_start)
 
   def restart(self, V_0, month_offset=0, total_interest_start=0.00, total_rate_start=0.00):
     self.clear()
+    self.year_summaries = []
     self.append(HistoryEntry(V_0, rate=0.00, interest=0.00,
                              total_interest=total_interest_start,
                              total_rate=total_rate_start,
@@ -107,6 +118,10 @@ class HistoryBase(list):
 
     self._print_table(table)
 
+    table = [self._get_table_row(e) for e in self.year_summaries]
+    self._print_table(table)
+
+
   def print_minimal(self):
     table = [self._get_table_row(e) for e in [self[0], self[-1]]]
     self._print_table(table)
@@ -124,7 +139,7 @@ class History(HistoryBase):
     self.V_0 = V_0
     self.p_year = p_year
 
-    self.rate = rate
+    self.rate = rate if callable(rate) else (lambda *args: rate)
 
     self.years = years
     self.month_offset = month_offset
@@ -141,6 +156,7 @@ class History(HistoryBase):
       self.calculate()
 
   def get_p_month(self, abs_month):
+    #return ((1 + self.p_year / 100) ** (1 / 12) - 1) * 100
     return self.p_year/12
 
   def get_grow_factor(self, abs_month):
@@ -158,9 +174,9 @@ class History(HistoryBase):
     cur_year_start_idx = (rel_month - 1) // 12 * 12 + 1  # TODO: respect start month in year
     return [self[i] for i in range(cur_year_start_idx, len(self))]
 
-  def get_value_rate_interest(self, abs_month):
+  def get_value_rate_interest(self, rel_month, abs_month):
     value = self.last().V_end
-    rate = self.rate
+    rate = self.rate(rel_month, abs_month)
 
     intial_value = value
     if self.payment_at_period_start:
@@ -176,8 +192,32 @@ class History(HistoryBase):
 
     return intial_value, value, rate, interest
 
+  def update_year_summaries(self, rel_month, abs_month, finished):
+    last_entry = self.last()
+    if (rel_month != 1 and round(last_entry.year) == last_entry.year) or finished:
+      year_entries = self.get_current_year_entries(rel_month)
+      self.year_summaries.append(HistoryEntry(
+        V_start=year_entries[0].V_start,
+        V_end=year_entries[-1].V_end,
+        rate=sum(e.rate for e in year_entries),
+        total_rate=year_entries[-1].total_rate,
+        interest=sum(e.interest for e in year_entries),
+        total_interest=year_entries[-1].total_interest,
+        tax=sum(e.tax for e in year_entries),
+        total_tax=year_entries[-1].total_tax,
+        month=year_entries[-1].month,
+        V_to_tax=year_entries[-1].V_to_tax,
+        V_for_tax=year_entries[-1].V_for_tax,
+        V_after_tax=year_entries[-1].V_after_tax,
+        tax_on_sell=year_entries[-1].tax_on_sell,
+        gain_after_tax=year_entries[-1].gain_after_tax,
+        vorabpauschale=year_entries[-1].vorabpauschale,
+      ))
+      return True
+    return False
+
   def month_step(self, rel_month, abs_month, max_months):
-    initial_value, value, rate, interest = self.get_value_rate_interest(abs_month)
+    initial_value, value, rate, interest = self.get_value_rate_interest(rel_month, abs_month)
 
     if self.V_0 < 0: # this is a loan
       tax = 0.00
@@ -194,12 +234,14 @@ class History(HistoryBase):
     self.append(HistoryEntry(0.00 if len(self) == 0 else self.last().V_end,
                              rate, interest, abs_month, tax=tax, V_end=value))
 
+    finished = False
     if max_months is not None and abs_month - self.month_offset >= max_months:
-      return False
+      finished = True
     elif max_months is None and value == 0.00:
-      return False
+      finished = True
 
-    return True
+    self.update_year_summaries(rel_month, abs_month, finished)
+    return not finished
 
   def calculate(self):
     if self.years is not None:
@@ -228,17 +270,8 @@ class StocksSavingsPlan(History):
   def get_p_month(self, abs_month):
     return ( (1+self.p_year/100) ** (1/12) - 1 ) * 100
 
-  def month_step(self, rel_month, abs_month, max_months):
-    # TODO: move to constructor
-    self.part_relevant_for_tax = 0.7
-    self.basis_interest = 0.5 / 100 * 0.7
-
-    initial_value, value, rate, interest = self.get_value_rate_interest(abs_month)
-
-    self.append(HistoryEntry(0.00 if len(self) == 0 else self.last().V_end,
-                             rate, interest, abs_month, V_end=value))
-
-    # at the end of year, calculate tax
+  def update_year_summaries(self, rel_month, abs_month, finished):
+    # at the end of year, calculate tax that has to be paid during hold (vorabpauschale)
     year_entries = self.get_current_year_entries(rel_month)
     if len(year_entries) >= 12:
       cur_year_interest = sum(e.interest for e in year_entries)
@@ -246,34 +279,52 @@ class StocksSavingsPlan(History):
       value_at_beginning = year_entries[-1].V_end - cur_year_interest - cur_year_rate
 
       vorabpauschale_begin = value_at_beginning * self.basis_interest
-      vorabpauschale_rates = sum((12.0-i)/12 * e.rate for i,e in enumerate(year_entries, start=0)) * self.basis_interest
+      vorabpauschale_rates = sum((12.0 - i) / 12 * e.rate for i, e in enumerate(year_entries, start=0)) * self.basis_interest
       vorabpauschale = vorabpauschale_begin + vorabpauschale_rates
 
       V_for_tax = min(vorabpauschale, max(0.00, cur_year_interest))
       V_part_for_tax = V_for_tax * self.part_relevant_for_tax
       tax = -max(0.00, V_part_for_tax - self.tax_free) * self.tax_rate
 
-      del self[-1]
+      last_entry = self.pop()
       self.append(HistoryEntry(0.00 if len(self) == 0 else self.last().V_end,
-                               rate, interest, abs_month, V_end=value,
+                               last_entry.rate, last_entry.interest, abs_month,
+                               V_end=last_entry.V_end,
                                tax=tax, V_for_tax=V_for_tax, vorabpauschale=vorabpauschale))
+      self.add_sell_tax(self.last())
 
-    last = self.last()
+    super().update_year_summaries(rel_month, abs_month, finished)
+
+  def add_sell_tax(self, entry):
+    # TODO: move to constructor
+    self.part_relevant_for_tax = 0.7
+    self.basis_interest = 0.5 / 100 * 0.7
+
     tax_paid = sum(e.tax for e in self[:-1])
     V_tax_paid = sum(e.V_for_tax for e in self[:-1])
-    last.V_to_tax = value - self[0].V_end - last.total_rate - V_tax_paid
-    V_to_tax = max(0.00, last.V_to_tax * self.part_relevant_for_tax - self.tax_free)
-    last.tax_on_sell = -V_to_tax * self.tax_rate
-    last.V_after_tax = last.V_end + last.tax_on_sell + tax_paid
+    entry.V_to_tax = entry.V_end - self[0].V_end - entry.total_rate - V_tax_paid
+    V_to_tax = max(0.00, entry.V_to_tax * self.part_relevant_for_tax - self.tax_free)
+    entry.tax_on_sell = -V_to_tax * self.tax_rate
+    entry.V_after_tax = entry.V_end + entry.tax_on_sell + tax_paid
+    entry.gain_after_tax = entry.total_interest + entry.tax_on_sell + tax_paid
 
-    last.gain_after_tax = last.total_interest + last.tax_on_sell + tax_paid
+  def month_step(self, rel_month, abs_month, max_months):
+    initial_value, value, rate, interest = self.get_value_rate_interest(rel_month, abs_month)
 
+    self.append(HistoryEntry(0.00 if len(self) == 0 else self.last().V_end,
+                             rate, interest, abs_month, V_end=value))
+
+    self.add_sell_tax(self.last())
+
+    finished = False
     if max_months is not None and abs_month - self.month_offset >= max_months:
-      return False
+      finished = True
     elif max_months is None and value == 0.00:
-      return False
+      finished = True
 
-    return True
+    self.update_year_summaries(rel_month, abs_month, finished)
+
+    return not finished
 
   # vvvvv printing methods vvvvv
   def _get_table_header(self):
@@ -309,6 +360,7 @@ class StocksSavingsPlanDataBased(StocksSavingsPlan):
 
   def get_grow_factor(self, abs_month):
     abs_month += 12*30 # TODO: define offset somewhere else
+    #abs_month += 420  # TODO: define offset somewhere else
     value_start, value_end = msci_world_data[abs_month][1], msci_world_data[abs_month+1][1]
     return value_end/value_start
 
@@ -336,6 +388,18 @@ class Chain:
       l.print()
 
 
+class Rate:
+  def __init__(self, rate, month_delay=0):
+    self.rate = rate
+    self.month_delay = month_delay
+
+  def __call__(self, rel_month, abs_month):
+    if rel_month > self.month_delay:
+      return self.rate
+    else:
+      return 0.00
+
+
 class FinancialPlan:
   def __init__(self, **kwargs):
     self.plans = kwargs
@@ -355,15 +419,23 @@ class FinancialPlan:
     print()
 
 
+# Interhyp calculates their loans as follows:
+# * use the standard interest (NOT the effective)
+# * payment at end of month
+# Example: AnnuityLoan(-296_200.00, 0.87, 1_300.00, 15, payment_at_period_start=False).print()
+
 #Chain(AnnuityLoan(-345_450.00, 1.28, 938.00, 15),
 #      AnnuityLoan(None, 1.01, 1001.00, 10)).print_years()
 
 #Chain(SavingsPlan(10_000.00, 1.00, 100.00, 10),
 #      SavingsPlan(None, 1.01, 1001.00, 10)).print_years()
 
-StocksSavingsPlanDataBased(45_000.00, 0.0, 710.00, 15, tax_free=1602.00).print_years()
+#StocksSavingsPlanDataBased(45_000.00, 0.0, 1_100.00, 15, tax_free=1602.00).print_years()
+StocksSavingsPlan(45_000.00, 3.0, 710.00, 15, tax_free=1602.00).print_years()
 
-#AnnuityLoan(-409_200.00, 1.25, 1_098.00, 20, payment_at_period_start=True).print_years()
+#AnnuityLoan(-100_000.00, 0.84, Rate(384.00, 12), 10, payment_at_period_start=True).print_years()
+
+#AnnuityLoan(-296_200.00, 0.87, 1_300.00, 15, payment_at_period_start=False).print()
 
 if False:
   month_budget = 2_000.00
