@@ -1,6 +1,7 @@
 import itertools
 import copy
 import csv
+import math
 import pprint
 import time
 
@@ -101,22 +102,23 @@ class HistoryBase(list):
     self._print_table(table)
 
   def print_years(self):
-    table = []
-    last_start_entry = None
-    for i, e in enumerate(self):
-      if (i == 1 or round(e.year) != e.year) and i != len(self) - 1:
-        continue
+    if False: # TODO: check and remove
+      table = []
+      last_start_entry = None
+      for i, e in enumerate(self):
+        if (i == 1 or round(e.year) != e.year) and i != len(self) - 1:
+          continue
 
-      e_cpy = copy.deepcopy(e)
-      if last_start_entry is not None:
-        e_cpy.V_start = last_start_entry.V_end
-        e_cpy.interest = e.total_interest - last_start_entry.total_interest
-        e_cpy.rate = e.total_rate - last_start_entry.total_rate
+        e_cpy = copy.deepcopy(e)
+        if last_start_entry is not None:
+          e_cpy.V_start = last_start_entry.V_end
+          e_cpy.interest = e.total_interest - last_start_entry.total_interest
+          e_cpy.rate = e.total_rate - last_start_entry.total_rate
 
-      table.append(self._get_table_row(e_cpy))
-      last_start_entry = e
+        table.append(self._get_table_row(e_cpy))
+        last_start_entry = e
 
-    self._print_table(table)
+      self._print_table(table)
 
     table = [self._get_table_row(e) for e in self.year_summaries]
     self._print_table(table)
@@ -211,11 +213,13 @@ class History(HistoryBase):
   def month_step(self, rel_month, abs_month, max_months):
     initial_value, value, rate, interest = self.get_value_rate_interest(rel_month, abs_month)
 
+    finished = False
     if self.V_0 < 0: # this is a loan
       tax = 0.00
       if value >= 0:
         rate = -initial_value
         value = 0.00
+        finished = True
     else: # this is a savings plan
       cur_year_interest = sum(e.interest for e in self.get_current_year_entries(rel_month))
       cur_year_interest += interest
@@ -226,10 +230,7 @@ class History(HistoryBase):
     self.append(HistoryEntry(0.00 if len(self) == 0 else self.last().V_end,
                              rate, interest, abs_month, tax=tax, V_end=value))
 
-    finished = False
     if max_months is not None and abs_month - self.month_offset >= max_months:
-      finished = True
-    elif max_months is None and value == 0.00:
       finished = True
 
     self.update_year_summaries(rel_month, abs_month, finished)
@@ -363,12 +364,15 @@ class StocksSavingsPlanDataBased(StocksSavingsPlan):
 class Chain:
   def __init__(self, *loans):
     self.loans = loans
+    self.year_summaries = []
     self.calculate()
 
   def calculate(self):
     last_l = None
+    self.year_summaries = []
     for l in self.loans:
       l.continue_history(last_l)
+      self.year_summaries += l.year_summaries
       last_l = l
 
   def last(self):
@@ -399,12 +403,46 @@ class FinancialPlan:
   def __init__(self, **kwargs):
     self.plans = kwargs
 
+  # TODO: this method needs to be tested thoroughly
+  def print_years(self):
+    def get_year_entry(year, year_summaries):
+      for entry in year_summaries:
+        if math.isclose(entry.year, year):
+          return entry
+      return None
+
+    plan_names = list(self.plans.keys())
+    last_plan_values = {name: float("nan") for name in plan_names}
+    present_years = sorted({entry.year for plan in self.plans.values() for entry in plan.year_summaries})
+    table = []
+    for year in present_years:
+      values = []
+      for name in plan_names:
+        year_entry = get_year_entry(year, self.plans[name].year_summaries)
+        if year_entry is not None:
+          last_plan_values[name] = year_entry.final_value()
+        values.append(last_plan_values[name])
+      table.append([year] + values + [sum(values)])
+
+    print(tabulate.tabulate(table, floatfmt="6_.2f",
+                            headers=["year"] + plan_names + ["SUM"]))
+    print()
+
   def print(self, only_summary=False):
-    values = []
+    if not only_summary:
+      self.print_all()
+    self.print_summary()
+
+  def print_all(self):
     for name, plan in self.plans.items():
       if not only_summary:
         print("***", name)
         plan.print_years()
+    print()
+
+  def print_summary(self):
+    values = []
+    for name, plan in self.plans.items():
       values += [[name, plan.last().final_value()]]
 
     print("*** Summary")
@@ -413,11 +451,26 @@ class FinancialPlan:
                             headers=["plan", "value"]))
     print()
 
+  def final_value(self):
+    return sum(plan.last().final_value() for plan in self.plans.values())
+
+
+
+# TODO:
+#   * make everything a history (TODO: which methods should be present?
+#   * Enable automatic splitting of rate like: define total rate, define rates for plans with fixed rate, use the rest for the remaining plan(s?)
+#   * Allow for dynamic rates
+#   * Auto adjust rate when a loan is finished and thus the rate can be invested (also on year level)
+#   * Implement plotting functionality
+#   * Implement absolute time of investment (especially useful for simulating stocks from historical data)
+#   * Add calculation of effective interest for savings plans (gain after fees and taxes)
 
 # Interhyp calculates their loans as follows:
 # * use the standard interest (NOT the effective)
 # * payment at end of month
 # Example: AnnuityLoan(-296_200.00, 0.87, 1_300.00, 15, payment_at_period_start=False).print()
+
+
 
 #Chain(AnnuityLoan(-345_450.00, 1.28, 938.00, 15),
 #      AnnuityLoan(None, 1.01, 1001.00, 10)).print_years()
@@ -426,12 +479,90 @@ class FinancialPlan:
 #      SavingsPlan(None, 1.01, 1001.00, 10)).print_years()
 
 #StocksSavingsPlanDataBased(45_000.00, 0.0, 1_100.00, 15, tax_free=1602.00).print_years()
-StocksSavingsPlan(45_000.00, 3.0, 710.00, 15, tax_free=1602.00).print_years()
+#StocksSavingsPlan(45_000.00, 3.0, 710.00, 15, tax_free=1602.00).print_years()
 
 #AnnuityLoan(-100_000.00, 0.84, Rate(384.00, 12), 10, payment_at_period_start=True).print_years()
 
 #AnnuityLoan(-296_200.00, 0.87, 1_300.00, 15, payment_at_period_start=False).print()
 
+# Matthias-Claudius-Straße
+if True:
+  month_budget = 2_000.00
+  etf_p = 3.00
+  #only_summary = False
+  only_summary = True
+
+  if True:
+    print("*" * 30)
+    print("*** 15a ***")
+    if True:
+      print("Price: 550k, Capital: 91_800.00, run time: 15a")
+      plan = FinancialPlan(
+        bank=AnnuityLoan(-394_868.00, 1.00, 981.00, 15),
+        KfW=Chain(AnnuityLoan(-100_000.00, 0.67, 375.00, 9),
+                  AnnuityLoan(None, 1.67, 375.00, 5)),
+        ETF=StocksSavingsPlan(46_500.00, etf_p, month_budget-981.00-375.00, 15, tax_free=1602.00)
+      )
+      plan.print_years()
+      plan.print(only_summary)
+
+      #AnnuityLoan(plan.final_value(), 6.00, 1500.00, 15).print_years()
+
+      #StocksSavingsPlan(0.00, etf_p, 2_000.00, 11, tax_free=1602.00).print_years()
+
+  if False:
+    print("*" * 30)
+    print("*** 15a ***")
+    if True:
+      print("Price: 550k, Capital: 68_800.00, run time: 15a")
+      plan = FinancialPlan(
+        bank=AnnuityLoan(-417_750.00, 1.17, 1_006.00, 15),
+        KfW=Chain(AnnuityLoan(-100_000.00, 0.84, 384.00, 9),
+                  AnnuityLoan(None, 1.84, 384.00, 5)),
+        ETF=StocksSavingsPlan(46_500.00 + 23_000.00, etf_p, month_budget-1_006.00-384.00, 15, tax_free=1602.00)
+      )
+      plan.print(only_summary)
+
+      AnnuityLoan(plan.final_value(), 6.00, 1500.00, 15).print_years()
+
+      StocksSavingsPlan(0.00, etf_p, 2_000.00, 11, tax_free=1602.00).print_years()
+
+  if False:
+    print("*" * 30)
+    print("*** 15a ***")
+    if True:
+      print("Price: 600k, Capital: 99_000.00, run time: 15a")
+      plan = FinancialPlan(
+        bank=AnnuityLoan(-440_000.00, 1.06, 1_111.00, 15),
+        KfW=Chain(AnnuityLoan(-100_000.00, 0.84, 384.00, 9),
+                  AnnuityLoan(None, 1.84, 384.00, 5)),
+        ETF=StocksSavingsPlan(46_500.00, etf_p, month_budget-1218.00-384.00, 15, tax_free=1602.00)
+      )
+      plan.print(only_summary)
+
+      AnnuityLoan(plan.final_value(), 6.00, 1500.00, 15).print_years()
+
+      #StocksSavingsPlan(0.00, etf_p, 2_000.00, 11, tax_free=1602.00).print_years()
+
+  if False:
+    print("*" * 30)
+    print("*** 15a ***")
+    if True:
+      print("Price: 600k, Capital: 73_614.00, run time: 15a")
+      plan = FinancialPlan(
+        bank=AnnuityLoan(-465_386.00, 1.17, 1218.00, 15),
+        KfW=Chain(AnnuityLoan(-100_000.00, 0.84, 384.00, 9),
+                  AnnuityLoan(None, 1.84, 384.00, 5)),
+        ETF=StocksSavingsPlan(46_500.00 + 25_000.00, etf_p, month_budget-1218.00-384.00, 25, tax_free=1602.00)
+      )
+      #plan.print(only_summary)
+      plan.print_years()
+
+      #AnnuityLoan(plan.final_value(), 6.00, 1500.00, 15).print_years()
+
+      #StocksSavingsPlan(0.00, etf_p, 2_000.00, 11, tax_free=1602.00).print_years()
+
+# Am Leitgraben
 if False:
   month_budget = 2_000.00
   etf_p = 5.00
