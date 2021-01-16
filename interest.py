@@ -499,7 +499,7 @@ if True:
       print("Price: 550k, Capital: 91_800.00, run time: 15a")
       plan = FinancialPlan(
         bank=AnnuityLoan(-394_868.00, 1.00, 981.00, 15),
-        KfW=Chain(AnnuityLoan(-100_000.00, 0.67, 375.00, 9),
+        KfW=Chain(AnnuityLoan(-100_000.00, 0.67, Rate(375.00, 12), 10),
                   AnnuityLoan(None, 1.67, 375.00, 5)),
         ETF=StocksSavingsPlan(46_500.00, etf_p, month_budget-981.00-375.00, 15, tax_free=1602.00)
       )
@@ -517,7 +517,7 @@ if True:
       print("Price: 550k, Capital: 68_800.00, run time: 15a")
       plan = FinancialPlan(
         bank=AnnuityLoan(-417_750.00, 1.17, 1_006.00, 15),
-        KfW=Chain(AnnuityLoan(-100_000.00, 0.84, 384.00, 9),
+        KfW=Chain(AnnuityLoan(-100_000.00, 0.84, Rate(384.00, 12), 10),
                   AnnuityLoan(None, 1.84, 384.00, 5)),
         ETF=StocksSavingsPlan(46_500.00 + 23_000.00, etf_p, month_budget-1_006.00-384.00, 15, tax_free=1602.00)
       )
@@ -534,7 +534,7 @@ if True:
       print("Price: 600k, Capital: 99_000.00, run time: 15a")
       plan = FinancialPlan(
         bank=AnnuityLoan(-440_000.00, 1.06, 1_111.00, 15),
-        KfW=Chain(AnnuityLoan(-100_000.00, 0.84, 384.00, 9),
+        KfW=Chain(AnnuityLoan(-100_000.00, 0.84, Rate(384.00, 12), 10),
                   AnnuityLoan(None, 1.84, 384.00, 5)),
         ETF=StocksSavingsPlan(46_500.00, etf_p, month_budget-1218.00-384.00, 15, tax_free=1602.00)
       )
@@ -551,7 +551,7 @@ if True:
       print("Price: 600k, Capital: 73_614.00, run time: 15a")
       plan = FinancialPlan(
         bank=AnnuityLoan(-465_386.00, 1.17, 1218.00, 15),
-        KfW=Chain(AnnuityLoan(-100_000.00, 0.84, 384.00, 9),
+        KfW=Chain(AnnuityLoan(-100_000.00, 0.84, Rate(384.00, 12), 10),
                   AnnuityLoan(None, 1.84, 384.00, 5)),
         ETF=StocksSavingsPlan(46_500.00 + 25_000.00, etf_p, month_budget-1218.00-384.00, 25, tax_free=1602.00)
       )
