@@ -6,6 +6,9 @@ import tabulate
 
 TABLULATE_FLOAT_FMT = "6_.2f"
 
+def cum_key(key):
+  return key + "_cum"
+
 
 class Month(date):
   def __new__(cls, year, month):
@@ -32,15 +35,14 @@ class Month(date):
 
 class MonthEntryBase(dict):
   FLOAT_ATTRIBUTES_GENERAL = ["V_start", "V_end"]
-  FLOAT_ATTRIBUTES_CUM = ["rate", "interest"]
+  FLOAT_ATTRIBUTES_CUM = ["rate", "interest", "tax"]
   NON_NUM_ATTRIBUTES = ["start"]
 
   @classmethod
   def get_show_attributes(cls, level="ALL"):
     if level == "ALL":
-      return (["start"]
-              + cls.FLOAT_ATTRIBUTES_GENERAL + cls.FLOAT_ATTRIBUTES_CUM
-              + ["cum_" + attr for attr in cls.FLOAT_ATTRIBUTES_CUM])
+      return (["start"] + cls.FLOAT_ATTRIBUTES_GENERAL
+              + sorted(cls.FLOAT_ATTRIBUTES_CUM + [cum_key(attr) for attr in cls.FLOAT_ATTRIBUTES_CUM]))
     elif level == "MINIMAL":
       return cls.FLOAT_ATTRIBUTES_GENERAL
     else:
@@ -61,12 +63,12 @@ class MonthEntryBase(dict):
 
     if prev is None:
       for key in self.FLOAT_ATTRIBUTES_CUM:
-        if "cum_" + key not in kwargs:
-          self["cum_" + key] = self[key]
+        if cum_key(key) not in kwargs:
+          self[cum_key(key)] = self[key]
     else:
       for key in self.FLOAT_ATTRIBUTES_CUM:
-        if "cum_" + key not in kwargs:
-          self["cum_" + key] = self[key] + prev.get("cum_" + key, 0.00)
+        if cum_key(key) not in kwargs:
+          self[cum_key(key)] = self[key] + prev.get(cum_key(key), 0.00)
 
       #prev["next"] = self
 
@@ -128,7 +130,7 @@ class MonthHistory(list):
 
     return result
 
-  # vvvvvvvvvvv output vvvvvvvvvvvvv
+  # vvvvvvvvvv output vvvvvvvvvv
   def table_header(self, level="ALL"):
     return self.MonthEntry.get_show_attributes(level)
 
@@ -151,7 +153,7 @@ class MonthHistory(list):
   def print_years(self, level="ALL"):
     years_summaries = self.get_year_summaries()
     print(self.to_string(years_summaries, level))
-  # ^^^^^^^^^^^^ output ^^^^^^^^^^^^^^
+  # ^^^^^^^^^^ output ^^^^^^^^^^
 
 
 class AnnuityLoan(MonthHistory):
@@ -159,9 +161,9 @@ class AnnuityLoan(MonthHistory):
     FLOAT_ATTRIBUTES_CUM = ["rate", "interest"]
 
   def rate(self, start):
-    return 100.00
+    return 1000.00
 
-  def get_grow_factor(self, start):
+  def grow_factor(self, start):
     return 1.0 + (0.05/12)
 
   def month_step(self):
@@ -178,7 +180,7 @@ class AnnuityLoan(MonthHistory):
       value = 0.00
       self.finished = True
 
-    value *= self.get_grow_factor(start)
+    value *= self.grow_factor(start)
     interest = value - initial_value - rate
 
     self.append(self.MonthEntry(start=start,
@@ -188,8 +190,58 @@ class AnnuityLoan(MonthHistory):
     return self[-1]
 
 
+class TaxInfo:
+  def __init__(self, tax_rate, tax_free, fraction_to_tax=1.0):
+    self.tax_rate = tax_rate
+    self.tax_free = tax_free
+    self.fraction_to_tax = fraction_to_tax
+    self.effective_tax_rate = tax_rate * fraction_to_tax
+
+
+tax_info_simple = TaxInfo(0.26375, 1_602.00)
+tax_info_stocks = TaxInfo(0.26375, 1_602.00, 0.7)
+
+
 class SavingsPlan(MonthHistory):
-  pass
+  # TODO: * vorschüssig vs nachschüssig
+  #       * Zinsperioden: jährlich, >monatlich<, ...
+
+  class MonthEntry(MonthEntryBase):
+    FLOAT_ATTRIBUTES_CUM = ["rate", "interest", "tax"]
+
+  def rate(self, start):
+    return 1000.00
+
+  def grow_factor(self, start):
+    return 1.0 + (0.05/12)
+
+  def month_step(self):
+    if self.finished:
+      self.append(copy.copy(self[-1]))
+
+    initial_value = self[-1]["V_end"]
+    start = self[-1]["start"].next_month()
+    rate = self.rate(start) # TODO: how to model the rate?
+
+    value = initial_value + rate
+    value *= self.grow_factor(start)
+    interest = value - initial_value - rate
+
+    # calculate tax
+    self.tax_info = tax_info_simple # TODO: move to constructor
+    cur_year_entries = [e for e in reversed(self) if e["start"].year == start.year]
+    cur_year_interest = sum(e["interest"] for e in cur_year_entries)
+    cur_year_interest += interest
+    value_for_tax = min(max(0.00, cur_year_interest - self.tax_info.tax_free), interest)
+    tax = -self.tax_info.effective_tax_rate * value_for_tax
+    value += tax
+
+    self.append(self.MonthEntry(start=start,
+                                V_start=initial_value, V_end=value,
+                                rate=rate, interest=interest,
+                                tax=tax,
+                                prev=self[-1]))
+    return self[-1]
 
 
 class StocksSavingsPlan(MonthHistory):
@@ -213,7 +265,7 @@ class Parallel(MonthHistory):
     self.append(sum(entries[1:], entries[0]))
     return self[-1]
 
-  def restart(self, start):
+  def restart(self, start, iter_start=None):
     self.start = start
     return self.append_sum([history.restart(start) for history in self.histories])
 
@@ -225,6 +277,22 @@ class Parallel(MonthHistory):
     entries = [history.month_step() for history in self.histories]
     self.finished = all(history.finished for history in self.histories)
     return self.append_sum(entries)
+
+  # vvvvvvvvvv output vvvvvvvvvv
+  def print(self, level="ALL"):
+    if level == "ALL":
+      for history in self.histories:
+        history.print(level)
+        print()
+    super().print(level)
+
+  def print_years(self, level="ALL"):
+    if level == "ALL":
+      for history in self.histories:
+        history.print_years(level)
+        print()
+    super().print_years(level)
+  # ^^^^^^^^^^ output ^^^^^^^^^^
 
 
 if False:
@@ -242,8 +310,8 @@ if False:
   a.print()
 
 Parallel(
-  "Test",
+  "parallel plan",
   start=Month(2021, 1),
-  plans=[AnnuityLoan("bank", -10_000.00),
-         AnnuityLoan("bank", -10_000.00)],
-).year_steps(11).print_years()
+  plans=[AnnuityLoan("bank", -200_000.00),
+         SavingsPlan("savings", 100_000.00, start=Month(2022, 1))],
+).year_steps(5).print_years()
