@@ -49,7 +49,7 @@ class MonthEntryBase(dict):
       raise ValueError(f"Unknown level={level}")
 
   def __init__(self, **kwargs):
-    prev = kwargs.get("prev", None)
+    prev = kwargs.pop("prev", None)
     #kwargs.setdefault("next", None)
 
     super().__init__(**kwargs)
@@ -74,7 +74,7 @@ class MonthEntryBase(dict):
 
   def __add__(self, other):
     keys = (set(self.keys()) | set(other.keys())) - set(self.NON_NUM_ATTRIBUTES)
-    assert self["start"] == other["start"]
+    assert self["start"] == other["start"], f"start mismatch: {self['start']} != {other['start']}"
     pairs = {key: self.get(key, 0.00) + other.get(key, 0.00) for key in keys}
     pairs["start"] = self["start"]
     return MonthEntryBase(**pairs)
@@ -99,12 +99,14 @@ class MonthHistory(list):
     self.append(self.MonthEntry(start=self.start.prev_month(), V_start=self.V_0, V_end=self.V_0))
     return self[-1]
 
-  def month_step(self):
+  def month_step(self, from_month):
     raise NotImplementedError
 
-  def month_steps(self, num_months):
+  def month_steps(self, num_months, form_month=None):
+    cur_month = (self.start if form_month is None else form_month)
     for m in range(num_months):
-      self.month_step()
+      self.month_step(cur_month)
+      cur_month = cur_month.next_month()
     return self
 
   def year_steps(self, num_years):
@@ -136,7 +138,7 @@ class MonthHistory(list):
 
   def to_table(self, entries, level="ALL"):
     attributes = self.table_header(level)
-    return [[entry[attr] for attr in attributes]
+    return [[entry.get(attr, 0.00) for attr in attributes]
             for entry in entries]
 
   def to_string(self, entries, level="ALL"):
@@ -166,9 +168,12 @@ class AnnuityLoan(MonthHistory):
   def grow_factor(self, start):
     return 1.0 + (0.05/12)
 
-  def month_step(self):
+  def month_step(self, from_month):
     if self.finished:
       self.append(copy.copy(self[-1]))
+
+    if from_month < self.start:
+      return
 
     initial_value = self[-1]["V_end"]
     start = self[-1]["start"].next_month()
@@ -249,34 +254,48 @@ class StocksSavingsPlan(MonthHistory):
 
 
 class Chain(MonthHistory):
-  def __init__(self, description, start=None, plans=[]):
+  def __init__(self, description, start=None, plans=None):
     super().__init__(description, start)
-    self.histories = plans
+    self.histories = (plans if plans is not None else [])
 
 
 class Parallel(MonthHistory):
-  def __init__(self, description, start=None, plans=[]):
+  def __init__(self, description, start=None, plans=None):
     super().__init__(description, start)
     self.description = description
-    self.histories = plans
-    self.restart(start)
+    self.histories = (plans if plans is not None else [])
+
+    history_starts = [history.start for history in self.histories]
+    set_history_starts = [history_start for history_start in history_starts if history_start is not None]
+    if start is not None:
+      assert min(set_history_starts) >= start
+      self.restart(start)
+    elif all(history_start is not None for history_start in history_starts):
+      self.restart(min(history_starts))
+
 
   def append_sum(self, entries):
     self.append(sum(entries[1:], entries[0]))
     return self[-1]
 
-  def restart(self, start, iter_start=None):
+  def restart(self, start):
     self.start = start
-    return self.append_sum([history.restart(start) for history in self.histories])
+    initial_entries = [(history.restart(start) if history.start is None
+                        else history.restart(history.start))
+                       for history in self.histories]
+    first_start = min(entry["start"] for entry in initial_entries)
+    return self.append_sum([entry for entry in initial_entries if entry["start"] == first_start])
 
   def clear(self):
     for history in self.histories:
       history.clear()
 
-  def month_step(self):
-    entries = [history.month_step() for history in self.histories]
+  def month_step(self, from_month):
+    entries = [history.month_step(from_month) for history in self.histories]
+    entries = [entry for entry in entries if entry is not None]
     self.finished = all(history.finished for history in self.histories)
-    return self.append_sum(entries)
+    if entries:
+      return self.append_sum(entries)
 
   # vvvvvvvvvv output vvvvvvvvvv
   def print(self, level="ALL"):
@@ -311,7 +330,8 @@ if False:
 
 Parallel(
   "parallel plan",
-  start=Month(2021, 1),
-  plans=[AnnuityLoan("bank", -200_000.00),
-         SavingsPlan("savings", 100_000.00, start=Month(2022, 1))],
+  start=Month(2020, 1),
+  plans=[AnnuityLoan("bank", -200_000.00, start=Month(2021, 1)),
+         AnnuityLoan("bank", -100_000.00)]
+         #SavingsPlan("savings", 100_000.00, start=Month(2022, 1))],
 ).year_steps(5).print_years()
