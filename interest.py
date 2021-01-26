@@ -154,6 +154,8 @@ class History(HistoryBase):
 
     self.payment_at_period_start = payment_at_period_start
 
+    self.loan_run_time = -1
+
     if self.V_0 is not None:
       self.calculate()
 
@@ -247,6 +249,11 @@ class History(HistoryBase):
     for rel_month in itertools.count(1):
       if not self.month_step(rel_month, rel_month+self.month_offset, max_months):
         break
+
+    # TODO: this is a hack!
+    if self.V_0 < 0.00:  # this loan is finished
+      max_month = max(e.month for e in self)
+      self.loan_run_time = max_month
 
 
 class AnnuityLoan(History):
@@ -355,8 +362,8 @@ class StocksSavingsPlanDataBased(StocksSavingsPlan):
     raise ValueError("Should not be called")
 
   def get_grow_factor(self, abs_month):
-    abs_month += 12*30 # TODO: define offset somewhere else
-    #abs_month += 420  # TODO: define offset somewhere else
+    #abs_month += 12*30 # TODO: define offset somewhere else
+    abs_month += 420  # TODO: define offset somewhere else
     value_start, value_end = msci_world_data[abs_month][1], msci_world_data[abs_month+1][1]
     return value_end/value_start
 
@@ -365,6 +372,7 @@ class Chain:
   def __init__(self, *loans):
     self.loans = loans
     self.year_summaries = []
+    self.loan_run_time = -1
     self.calculate()
 
   def calculate(self):
@@ -374,6 +382,10 @@ class Chain:
       l.continue_history(last_l)
       self.year_summaries += l.year_summaries
       last_l = l
+
+    # TODO: this is a hack!
+    if last_l.V_0 < 0.00: # this loan is finished
+      self.loan_run_time = max(l.loan_run_time for l in self.loans)
 
   def last(self):
     return self.loans[-1].last()
@@ -445,7 +457,7 @@ class FinancialPlan:
     for name, plan in self.plans.items():
       values += [[name, plan.last().final_value()]]
 
-    print("*** Summary")
+    print("*** Summary ({}a)".format(max(p.last().year for p in self.plans.values())))
     values += [["SUM", sum(e[1] for e in values)]]
     print(tabulate.tabulate(values, floatfmt="6_.2f",
                             headers=["plan", "value"]))
@@ -485,12 +497,180 @@ class FinancialPlan:
 
 #AnnuityLoan(-296_200.00, 0.87, 1_300.00, 15, payment_at_period_start=False).print()
 
-# Matthias-Claudius-Straße
+# Matthias-Claudius-Straße (30a)
 if True:
   month_budget = 2_000.00
   etf_p = 3.00
+  p_continue = 2.00
   #only_summary = False
   only_summary = True
+  #print_years = False
+  print_years = True
+
+  if True:
+    print("*" * 30)
+    print("*** 20a ***")
+
+    print("Price: 480k, Capital: 140_000.00, run time: 20a")
+    loan = AnnuityLoan(-380_800.00, 1.15, 1_311.00, 20)
+    print("loan run time:", loan.loan_run_time / 12)
+    plan = FinancialPlan(
+      bank=loan,  # <---- TODO: discuss
+      ETF=StocksSavingsPlan(0.00, etf_p,
+                            lambda rm, _: month_budget - loan.rate(rm, _) if rm < loan.loan_run_time else month_budget,
+                            20, tax_free=1602.00)
+    )
+    if print_years: plan.print_years()
+    plan.print(only_summary)
+
+    print("*" * 30)
+    print("*** 20a ***")
+
+    print("Price: 485k, Capital: 140_000.00, run time: 20a")
+    loan = Chain(AnnuityLoan(-386_255.00, 1.15, 1_329.00, 20),
+                 AnnuityLoan(None, 3.0, 1_329.00, 12))
+    print("loan run time:", loan.loan_run_time / 12)
+    plan = FinancialPlan(
+      bank=loan,  # <---- TODO: discuss
+      ETF=StocksSavingsPlan(0.00, etf_p,
+                            lambda rm, _: month_budget - 1_329.00 if rm < loan.loan_run_time else month_budget,
+                            32, tax_free=1602.00)
+    )
+    if print_years: plan.print_years()
+    plan.print(only_summary)
+
+  if False:
+    for pi, p_continue in enumerate([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]):
+      print()
+      print("#" * 5, p_continue, "#" * 30)
+
+      if True and pi == 0:
+        print("*" * 30)
+        print("*** 30a ***")
+
+        print("Price: 506k, Capital: 140_000.00, run time: 30a")
+        loan = AnnuityLoan(-409_000.00, 1.49, 1_350.00, 32)
+        print("loan run time:", loan.loan_run_time / 12)
+        plan = FinancialPlan(
+          bank=loan, # <---- TODO: discuss
+          ETF=StocksSavingsPlan(0.00, etf_p,
+                                lambda rm, _: month_budget - loan.rate(rm, _) if rm < loan.loan_run_time else month_budget,
+                                32, tax_free=1602.00)
+        )
+        if print_years: plan.print_years()
+        plan.print(only_summary)
+
+      if False:
+        print("Price: 506k, Capital: 140_000.00, run time: 30a; with KfW")
+        plan = FinancialPlan(
+          bank=AnnuityLoan(-309_000.00, 1.56, 966.00, 32),
+          KfW=Chain(AnnuityLoan(-100_000.00, 0.87, 384.00, 10),
+                    AnnuityLoan(None, 6.0, 384.00, 22)),
+          ETF=StocksSavingsPlan(0.00, etf_p, month_budget - 966.00 - 384.00, 32, tax_free=1602.00)
+        )
+        if print_years: plan.print_years()
+        plan.print(only_summary)
+
+        """plan2 = FinancialPlan(
+          bank=AnnuityLoan(plan.plans["bank"].last().final_value(), 1.56, 1_350.00, 6),  # <---- TODO: discuss
+          ETF=StocksSavingsPlan(plan.plans["ETF"].last().V_end,
+                                etf_p, month_budget - 1_350.00, 6, tax_free=1602.00)
+        )
+        if print_years: plan2.print_years()
+        plan2.print(only_summary)
+        """
+
+      if False:
+        print("Price: 506k, Capital: 140_000.00, run time: 30a; with KfW (get rid of KfW after 10 years)")
+        plan = FinancialPlan(
+          bank=AnnuityLoan(-309_000.00, 1.56, 966.00, 10),  # <---- TODO: discuss
+          KfW=AnnuityLoan(-100_000.00, 0.87, 384.00, 10),
+          ETF=StocksSavingsPlan(0.00, etf_p, month_budget - 966.00 - 384.00, 10, tax_free=1602.00)
+        )
+        if print_years: plan.print_years()
+        plan.print(only_summary)
+
+        plan2 = FinancialPlan(
+          bank=AnnuityLoan(plan.plans["bank"].last().final_value(), 1.56, 1_350.00, 22),  # <---- TODO: discuss
+          ETF=StocksSavingsPlan(plan.plans["ETF"].last().final_value() + plan.plans["KfW"].last().final_value(),
+                                etf_p, month_budget - 1_350.00, 22, tax_free=1602.00)
+        )
+        if print_years: plan2.print_years()
+        plan2.print(only_summary)
+
+      if True:
+        print("Price: 506k, Capital: 140_000.00, run time: 25a")
+        loan = Chain(AnnuityLoan(-409_000.00, 1.35, 1_350.00, 25),  # <---- TODO: discuss
+                     AnnuityLoan(None, p_continue, 1_350.00, 7))
+        print("loan run time:", loan.loan_run_time/12)
+        plan = FinancialPlan(
+          bank=loan,
+          ETF=StocksSavingsPlan(0.00, etf_p,
+                                lambda rm, _: month_budget - loan.loans[0].rate(rm, _) if rm < loan.loan_run_time else month_budget,
+                                32, tax_free=1602.00)
+        )
+        if print_years: plan.print_years()
+        plan.print(only_summary)
+
+      if True:
+        print("Price: 506k, Capital: 140_000.00, run time: 20a")
+        loan = Chain(AnnuityLoan(-409_000.00, 1.15, 1_350.00, 20),  # <---- TODO: discuss
+                     AnnuityLoan(None, p_continue, 1_350.00, 12))
+        print("loan run time:", loan.loan_run_time / 12)
+        plan = FinancialPlan(
+          bank=loan,
+          ETF=StocksSavingsPlan(0.00, etf_p,
+                                lambda rm, _: month_budget - loan.loans[0].rate(rm, _) if rm < loan.loan_run_time else month_budget,
+                                32, tax_free=1602.00)
+        )
+        if print_years: plan.print_years()
+        plan.print(only_summary)
+
+      # TODO: for comparison
+      if False:
+        print("*" * 30)
+        print("*** 15a (prolong the debt and keep the ETFs) ***")
+        print("Price: 506k, Capital: 90_000.00, run time: 15a")
+        plan = FinancialPlan(
+          bank=Chain(AnnuityLoan(-459_010.00, 1.16, 1_350.00, 15), # <---- TODO: discuss
+                     AnnuityLoan(None, 4.00, 1_350.00, 17)),
+          ETF=Chain(StocksSavingsPlan(47_000.00, etf_p, month_budget - 1_350.00, 15, tax_free=1602.00),
+                    StocksSavingsPlan(None, etf_p, month_budget - 1_350.00, 17, tax_free=1602.00))
+        )
+        if print_years: plan.print_years()
+        plan.print(only_summary)
+
+      # TODO: for comparison
+      if False:
+        print("*" * 30)
+        print("*** 15a (sell all ETFs) ***")
+        print("Price: 506k, Capital: 90_000.00, run time: 15a")
+        plan = FinancialPlan(
+          bank=AnnuityLoan(-459_010.00, 1.16, 1_350.00, 15),
+          ETF=StocksSavingsPlan(47_000.00, etf_p, month_budget - 1_350.00, 15, tax_free=1602.00)
+        )
+        if print_years: plan.print_years()
+        plan.print(only_summary)
+
+        plan2 = FinancialPlan(
+          bank2=AnnuityLoan(plan.final_value(), 6.00, 1_350.00, 5),
+          ETF2=Chain(StocksSavingsPlan(0.00, etf_p, month_budget - 1_350.00, 5, tax_free=1602.00),
+                     StocksSavingsPlan(None, etf_p, month_budget, 12, tax_free=1602.00))
+        )
+        if print_years: plan2.print_years()
+        plan2.print(only_summary)
+
+        #AnnuityLoan(plan.final_value(), 6.00, 1500.00, 15).print_years()
+
+        #StocksSavingsPlan(0.00, etf_p, 2_000.00, 11, tax_free=1602.00).print_years()
+
+
+# Matthias-Claudius-Straße (15a)
+if False:
+  month_budget = 2_000.00
+  etf_p = 4.00
+  only_summary = False
+  #only_summary = True
 
   if True:
     print("*" * 30)
@@ -506,7 +686,7 @@ if True:
       plan.print_years()
       plan.print(only_summary)
 
-      #AnnuityLoan(plan.final_value(), 6.00, 1500.00, 15).print_years()
+      AnnuityLoan(plan.final_value(), 6.00, 1500.00, 15).print_years()
 
       #StocksSavingsPlan(0.00, etf_p, 2_000.00, 11, tax_free=1602.00).print_years()
 
@@ -565,7 +745,7 @@ if True:
 # Am Leitgraben
 if False:
   month_budget = 2_000.00
-  etf_p = 5.00
+  etf_p = 3.00
   only_summary = True
 
   print("*" * 30)
@@ -578,8 +758,10 @@ if False:
                 AnnuityLoan(None, 1.84, 384.00, 5)),
       ETF=StocksSavingsPlan(45_000.00, etf_p, month_budget-1_108.00-384.00, 15, tax_free=1602.00)
     )
-    plan.print(only_summary)
+    plan.print_years()
 
+  import sys
+  sys.exit()
   if True:
     print("Capital: 99_000.00, run time: 15a, low rate to bank, 30_000.00 from somewhere")
     plan = FinancialPlan(

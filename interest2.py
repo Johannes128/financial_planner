@@ -1,5 +1,7 @@
+import collections
 import copy
 from datetime import date
+import numbers
 import itertools
 import tabulate
 
@@ -33,8 +35,28 @@ class Month(date):
     return f"{self.__class__.__name__}({self.year}, {self.month})"
 
 
+class Rate:
+  def __init__(self, plan):
+    self.plan = plan
+
+  def __call__(self, start, limit=None):
+    pass
+
+
+class ConstantRate(Rate):
+  def __init__(self, value, plan):
+    super().__init__(plan)
+    self.value = value
+
+  def __call__(self, start, limit=float("inf")):
+    if self.plan.finished:
+      return 0.0
+    return min(self.value, limit)
+
+
+
 class MonthEntryBase(dict):
-  FLOAT_ATTRIBUTES_GENERAL = ["V_start", "V_end"]
+  FLOAT_ATTRIBUTES_GENERAL = ["V_start", "V_end", "V_final"]
   FLOAT_ATTRIBUTES_CUM = ["rate", "interest", "tax"]
   NON_NUM_ATTRIBUTES = ["start"]
 
@@ -83,15 +105,23 @@ class MonthEntryBase(dict):
 class MonthHistory(list):
   MonthEntry = MonthEntryBase
 
-  def __init__(self, description, V_0, start=None):
+  def __init__(self, description, V_0, rate, start=None):
     super().__init__()
     self.description = description
     self.V_0 = V_0
     self.start = start
     self.finished = False
 
+    if isinstance(rate, numbers.Number):
+      self.rate_function = ConstantRate(rate, self)
+    elif isinstance(rate, Rate):
+      self.rate_function = rate
+
     if start is not None:
       self.restart(start)
+
+  def rate(self, start, limit=float("inf")):
+    return self.rate_function(start, limit)
 
   def restart(self, start):
     self.start = start
@@ -157,13 +187,86 @@ class MonthHistory(list):
     print(self.to_string(years_summaries, level))
   # ^^^^^^^^^^ output ^^^^^^^^^^
 
+  def plot(self):
+    import matplotlib.pyplot as plt
+    #plt.style.use("fivethirtyeight")
+    plt.xticks(rotation=45, ha='right')
+
+    starts = [e["start"] for e in self]
+    V_ends = [e["V_end"] for e in self]
+    plt.bar(starts, V_ends, width=10)
+    plt.show()
+
 
 class AnnuityLoan(MonthHistory):
   class MonthEntry(MonthEntryBase):
     FLOAT_ATTRIBUTES_CUM = ["rate", "interest"]
 
-  def rate(self, start):
-    return 1000.00
+  def grow_factor(self, start):
+    return 1.0 + (0.05/12)
+
+  def month_step(self, from_month):
+    if self.finished:
+      self.append(copy.copy(self[-1]))
+
+    if from_month < self.start:
+      return
+
+    initial_value = self[-1]["V_end"]
+    start = self[-1]["start"].next_month()
+    rate = self.rate(start, -initial_value)
+
+    value = initial_value + rate
+    if value >= 0:
+      rate = max(0.00, rate - value)
+      value = 0.00
+      self.finished = True
+
+    value *= self.grow_factor(start)
+    interest = value - initial_value - rate
+
+    self.append(self.MonthEntry(start=start,
+                                V_start=initial_value,
+                                V_end=value, V_final=value,
+                                rate=rate, interest=interest,
+                                prev=self[-1]))
+    return self[-1]
+
+
+class TaxInfo:
+  def __init__(self, tax_rate, tax_free, fraction_to_tax=1.0):
+    self.tax_rate = tax_rate
+    self.tax_free = tax_free
+    self.fraction_to_tax = fraction_to_tax
+    self.effective_tax_rate = tax_rate * fraction_to_tax
+
+
+TAX_INFO_REGULAR = {
+  "single": TaxInfo(0.26375, 801.00),
+  "married": TaxInfo(0.26375, 1_602.00)
+}
+TAX_INFO_STOCKS = {
+  "single": TaxInfo(0.26375, 1_602.00, 0.7),
+  "married": TaxInfo(0.26375, 1_602.00, 0.7)
+}
+
+
+class SavingsPlan(MonthHistory):
+  # TODO: * vorschüssig vs nachschüssig
+  #       * Zinsperioden: jährlich, >monatlich<, ...
+
+  class MonthEntry(MonthEntryBase):
+    FLOAT_ATTRIBUTES_CUM = ["rate", "interest", "tax"]
+
+  def __init__(self, *args, tax_info="married", **kwargs):
+    if isinstance(tax_info, str):
+      self.tax_info = TAX_INFO_REGULAR[tax_info]
+    elif isinstance(tax_info, TaxInfo):
+      self.tax_info = tax_info
+    else:
+      raise ValueError(f"Unknown tax info {tax_info}")
+
+    super().__init__(*args, **kwargs)
 
   def grow_factor(self, start):
     return 1.0 + (0.05/12)
@@ -180,60 +283,10 @@ class AnnuityLoan(MonthHistory):
     rate = self.rate(start) # TODO: how to model the rate?
 
     value = initial_value + rate
-    if value >= 0:
-      rate = max(0.00, rate - value)
-      value = 0.00
-      self.finished = True
-
-    value *= self.grow_factor(start)
-    interest = value - initial_value - rate
-
-    self.append(self.MonthEntry(start=start,
-                                V_start=initial_value, V_end=value,
-                                rate=rate, interest=interest,
-                                prev=self[-1]))
-    return self[-1]
-
-
-class TaxInfo:
-  def __init__(self, tax_rate, tax_free, fraction_to_tax=1.0):
-    self.tax_rate = tax_rate
-    self.tax_free = tax_free
-    self.fraction_to_tax = fraction_to_tax
-    self.effective_tax_rate = tax_rate * fraction_to_tax
-
-
-tax_info_simple = TaxInfo(0.26375, 1_602.00)
-tax_info_stocks = TaxInfo(0.26375, 1_602.00, 0.7)
-
-
-class SavingsPlan(MonthHistory):
-  # TODO: * vorschüssig vs nachschüssig
-  #       * Zinsperioden: jährlich, >monatlich<, ...
-
-  class MonthEntry(MonthEntryBase):
-    FLOAT_ATTRIBUTES_CUM = ["rate", "interest", "tax"]
-
-  def rate(self, start):
-    return 1000.00
-
-  def grow_factor(self, start):
-    return 1.0 + (0.05/12)
-
-  def month_step(self):
-    if self.finished:
-      self.append(copy.copy(self[-1]))
-
-    initial_value = self[-1]["V_end"]
-    start = self[-1]["start"].next_month()
-    rate = self.rate(start) # TODO: how to model the rate?
-
-    value = initial_value + rate
     value *= self.grow_factor(start)
     interest = value - initial_value - rate
 
     # calculate tax
-    self.tax_info = tax_info_simple # TODO: move to constructor
     cur_year_entries = [e for e in reversed(self) if e["start"].year == start.year]
     cur_year_interest = sum(e["interest"] for e in cur_year_entries)
     cur_year_interest += interest
@@ -242,7 +295,8 @@ class SavingsPlan(MonthHistory):
     value += tax
 
     self.append(self.MonthEntry(start=start,
-                                V_start=initial_value, V_end=value,
+                                V_start=initial_value,
+                                V_end=value, V_final=value,
                                 rate=rate, interest=interest,
                                 tax=tax,
                                 prev=self[-1]))
@@ -261,7 +315,12 @@ class Chain(MonthHistory):
 
 class Parallel(MonthHistory):
   def __init__(self, description, start=None, plans=None):
-    super().__init__(description, start)
+    desc_counts = collections.Counter([plan.description for plan in plans])
+    for desc, count in desc_counts.items():
+      if count > 1:
+        raise ValueError(f"The description '{desc}' occurs {count} times. Descriptions need to be unique.")
+
+    super().__init__(description, None, start) # TODO: is rate=None a good idea?
     self.description = description
     self.histories = (plans if plans is not None else [])
 
@@ -310,7 +369,44 @@ class Parallel(MonthHistory):
       for history in self.histories:
         history.print_years(level)
         print()
+
+    years_summaries = [history.get_year_summaries()
+                       for history in self.histories]
+    starts = sorted(set(entry["start"] for summary in years_summaries for entry in summary))
+    m_index = [0 for _ in self.histories]
+    values = []
+    for start in starts:
+      cur_values = [start]
+      for i, summary in enumerate(years_summaries):
+        if m_index[i] >= len(summary) or start < summary[m_index[i]]["start"]:
+          cur_values.append(None)
+        else:
+          if m_index[i] >= len(summary):
+            cur_values.append(None)
+          else:
+            entry = summary[m_index[i]]
+            cur_values.append(entry["V_end"])
+          m_index[i] += 1
+      cur_values.append(sum(v for v in cur_values[1:] if v is not None))
+      values.append(cur_values)
+
     super().print_years(level)
+
+    print()
+    headers = ["\nstart"] + [history.description + "\nV_end" for history in self.histories] + ["total\nV_end"]
+    print(tabulate.tabulate(values, floatfmt=TABLULATE_FLOAT_FMT,
+                            headers=headers))
+
+  def print_summary(self):
+    values = []
+    for history in self.histories:
+      values += [[history.description, history[-1]["V_end"], history[-1]["V_final"]]]
+
+    print(f"*** Summary of {self.description}")
+    values += [["SUM", sum(e[1] for e in values), sum(e[2] for e in values)]]
+    print(tabulate.tabulate(values, floatfmt=TABLULATE_FLOAT_FMT,
+                            headers=["description", "V_end", "V_final"]))
+    print()
   # ^^^^^^^^^^ output ^^^^^^^^^^
 
 
@@ -323,15 +419,11 @@ if False:
                  AnnuityLoan(None, 1.67, 375.00, 5)),
   )
 
-if False:
-  a = AnnuityLoan("bank", 10_000.00, Month(2021, 1))
-  a.year_steps(3)
-  a.print()
 
 Parallel(
   "parallel plan",
   start=Month(2020, 1),
-  plans=[AnnuityLoan("bank", -200_000.00, start=Month(2021, 1)),
-         AnnuityLoan("bank", -100_000.00)]
-         #SavingsPlan("savings", 100_000.00, start=Month(2022, 1))],
-).year_steps(5).print_years()
+  plans=[AnnuityLoan("SPK", -200_000.00, 1000.00, start=Month(2021, 1)),
+         AnnuityLoan("ING", -100_000.00, 1000.00),
+         SavingsPlan("savings", 100_000.00, 1000.00, start=Month(2020, 1))],
+).year_steps(10).print_years()
