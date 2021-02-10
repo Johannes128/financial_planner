@@ -56,7 +56,7 @@ class ConstantRate(Rate):
 
 
 class MonthEntryBase(dict):
-  FLOAT_ATTRIBUTES_GENERAL = ["V_start", "V_end", "V_final"]
+  FLOAT_ATTRIBUTES_GENERAL = ["V_start", "V_end", "V_net"]
   FLOAT_ATTRIBUTES_CUM = ["rate", "interest", "tax"]
   NON_NUM_ATTRIBUTES = ["start"]
 
@@ -195,6 +195,7 @@ class MonthHistory(list):
     starts = [e["start"] for e in self]
     V_ends = [e["V_end"] for e in self]
     plt.bar(starts, V_ends, width=10)
+    #plt.plot(starts, V_ends)
     plt.show()
 
 
@@ -227,7 +228,7 @@ class AnnuityLoan(MonthHistory):
 
     self.append(self.MonthEntry(start=start,
                                 V_start=initial_value,
-                                V_end=value, V_final=value,
+                                V_end=value, V_net=value,
                                 rate=rate, interest=interest,
                                 prev=self[-1]))
     return self[-1]
@@ -242,12 +243,16 @@ class TaxInfo:
 
 
 TAX_INFO_REGULAR = {
-  "single": TaxInfo(0.26375, 801.00),
-  "married": TaxInfo(0.26375, 1_602.00)
+  "single_with_soli": TaxInfo(0.26375, 801.00),
+  "married_with_soli": TaxInfo(0.26375, 1_602.00),
+  "single": TaxInfo(0.25, 801.00),
+  "married": TaxInfo(0.25, 1_602.00)
 }
 TAX_INFO_STOCKS = {
-  "single": TaxInfo(0.26375, 1_602.00, 0.7),
-  "married": TaxInfo(0.26375, 1_602.00, 0.7)
+  "single_with_soli": TaxInfo(0.26375, 1_602.00, 0.7),
+  "married_with_soli": TaxInfo(0.26375, 1_602.00, 0.7),
+  "single": TaxInfo(0.25, 1_602.00, 0.7),
+  "married": TaxInfo(0.25, 1_602.00, 0.7)
 }
 
 
@@ -258,18 +263,22 @@ class SavingsPlan(MonthHistory):
   class MonthEntry(MonthEntryBase):
     FLOAT_ATTRIBUTES_CUM = ["rate", "interest", "tax"]
 
-  def __init__(self, *args, tax_info="married", **kwargs):
+  TAX_INFO_MAP = TAX_INFO_REGULAR
+
+  def __init__(self, *args, p_year=None, tax_info="married", **kwargs):
     if isinstance(tax_info, str):
-      self.tax_info = TAX_INFO_REGULAR[tax_info]
+      self.tax_info = self.TAX_INFO_MAP[tax_info]
     elif isinstance(tax_info, TaxInfo):
       self.tax_info = tax_info
     else:
       raise ValueError(f"Unknown tax info {tax_info}")
 
+    self.p_year = p_year
+
     super().__init__(*args, **kwargs)
 
   def grow_factor(self, start):
-    return 1.0 + (0.05/12)
+    return 1.0 + (self.p_year/100/12)
 
   def month_step(self, from_month):
     if self.finished:
@@ -282,7 +291,7 @@ class SavingsPlan(MonthHistory):
     start = self[-1]["start"].next_month()
     rate = self.rate(start) # TODO: how to model the rate?
 
-    value = initial_value + rate
+    value = initial_value + rate # TODO: distinguish payment at start/end
     value *= self.grow_factor(start)
     interest = value - initial_value - rate
 
@@ -296,15 +305,52 @@ class SavingsPlan(MonthHistory):
 
     self.append(self.MonthEntry(start=start,
                                 V_start=initial_value,
-                                V_end=value, V_final=value,
+                                V_end=value, V_net=value,
                                 rate=rate, interest=interest,
                                 tax=tax,
                                 prev=self[-1]))
     return self[-1]
 
 
-class StocksSavingsPlan(MonthHistory):
-  pass
+class StocksSavingsPlan(SavingsPlan):
+  class MonthEntry(SavingsPlan.MonthEntry):
+    FLOAT_ATTRIBUTES_GENERAL = ["V_start", "V_end", "V_net", "tax_sell"]
+
+  TAX_INFO_MAP = TAX_INFO_STOCKS
+
+  def grow_factor(self, start):
+    return (1 + self.p_year / 100) ** (1 / 12)
+
+  def month_step(self, from_month):
+    if self.finished:
+      self.append(copy.copy(self[-1]))
+
+    if from_month < self.start:
+      return
+
+    initial_value = self[-1]["V_end"]
+    start = self[-1]["start"].next_month()
+    rate = self.rate(start)
+
+    value = initial_value + rate  # TODO: distinguish payment at start/end
+    value *= self.grow_factor(start)
+    interest = value - initial_value - rate
+
+    # calculate tax on sell
+    tax_paid = 0 # sum(e.tax for e in self[:-1])
+    interest_tax_paid = 0 # sum(e.V_for_tax for e in self[:-1])
+    interest_to_tax = interest + self[-1]["interest_cum"] - interest_tax_paid
+    interest_to_tax = max(0.00, interest_to_tax * self.tax_info.fraction_to_tax - self.tax_info.tax_free)
+    tax_on_sell = -interest_to_tax * self.tax_info.tax_rate
+    V_after_tax = value + tax_on_sell + tax_paid
+
+    self.append(self.MonthEntry(start=start,
+                                V_start=initial_value,
+                                V_end=value, V_net=V_after_tax,
+                                rate=rate, interest=interest,
+                                tax=0.0, tax_sell=tax_on_sell,
+                                prev=self[-1]))
+    return self[-1]
 
 
 class Chain(MonthHistory):
@@ -370,6 +416,8 @@ class Parallel(MonthHistory):
         history.print_years(level)
         print()
 
+    super().print_years(level)
+
     years_summaries = [history.get_year_summaries()
                        for history in self.histories]
     starts = sorted(set(entry["start"] for summary in years_summaries for entry in summary))
@@ -390,8 +438,6 @@ class Parallel(MonthHistory):
       cur_values.append(sum(v for v in cur_values[1:] if v is not None))
       values.append(cur_values)
 
-    super().print_years(level)
-
     print()
     headers = ["\nstart"] + [history.description + "\nV_end" for history in self.histories] + ["total\nV_end"]
     print(tabulate.tabulate(values, floatfmt=TABLULATE_FLOAT_FMT,
@@ -400,12 +446,12 @@ class Parallel(MonthHistory):
   def print_summary(self):
     values = []
     for history in self.histories:
-      values += [[history.description, history[-1]["V_end"], history[-1]["V_final"]]]
+      values += [[history.description, history[-1]["V_end"], history[-1]["V_net"]]]
 
     print(f"*** Summary of {self.description}")
     values += [["SUM", sum(e[1] for e in values), sum(e[2] for e in values)]]
     print(tabulate.tabulate(values, floatfmt=TABLULATE_FLOAT_FMT,
-                            headers=["description", "V_end", "V_final"]))
+                            headers=["description", "V_end", "V_net"]))
     print()
   # ^^^^^^^^^^ output ^^^^^^^^^^
 
@@ -420,10 +466,15 @@ if False:
   )
 
 
-Parallel(
-  "parallel plan",
-  start=Month(2020, 1),
-  plans=[AnnuityLoan("SPK", -200_000.00, 1000.00, start=Month(2021, 1)),
-         AnnuityLoan("ING", -100_000.00, 1000.00),
-         SavingsPlan("savings", 100_000.00, 1000.00, start=Month(2020, 1))],
-).year_steps(10).print_years()
+if False:
+  Parallel(
+    "parallel plan",
+    start=Month(2020, 1),
+    plans=[AnnuityLoan("SPK", -200_000.00, 1000.00, start=Month(2021, 1)),
+           AnnuityLoan("ING", -100_000.00, 1000.00),
+           SavingsPlan("savings", 100_000.00, 1000.00, p_year=5.0, start=Month(2020, 1))],
+  ).year_steps(10).print_years()
+  #).year_steps(10).plot()
+
+
+StocksSavingsPlan("savings", 100_000.00, 1000.00, p_year=5.0, start=Month(2020, 1)).year_steps(10).print_years()
