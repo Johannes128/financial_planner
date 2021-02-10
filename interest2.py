@@ -1,8 +1,9 @@
 import collections
 import copy
 from datetime import date
-import numbers
 import itertools
+import numbers
+import pprint
 import tabulate
 
 
@@ -129,6 +130,16 @@ class MonthHistory(list):
     self.append(self.MonthEntry(start=self.start.prev_month(), V_start=self.V_0, V_end=self.V_0))
     return self[-1]
 
+  def get_current_year_entries(self):
+    year = self[-1]["start"].year
+    year_entries = []
+    for entry in reversed(self):
+      if entry["start"].year == year:
+        year_entries.append(entry)
+      else:
+        break
+    return list(reversed(year_entries))
+
   def month_step(self, from_month):
     raise NotImplementedError
 
@@ -240,6 +251,7 @@ class TaxInfo:
     self.tax_free = tax_free
     self.fraction_to_tax = fraction_to_tax
     self.effective_tax_rate = tax_rate * fraction_to_tax
+    self.basis_interest_factor = 0.005 * 0.7 # TODO: make configurable
 
 
 TAX_INFO_REGULAR = {
@@ -315,6 +327,7 @@ class SavingsPlan(MonthHistory):
 class StocksSavingsPlan(SavingsPlan):
   class MonthEntry(SavingsPlan.MonthEntry):
     FLOAT_ATTRIBUTES_GENERAL = ["V_start", "V_end", "V_net", "tax_sell"]
+    FLOAT_ATTRIBUTES_CUM = ["rate", "interest", "tax", "int_tax_paid"]
 
   TAX_INFO_MAP = TAX_INFO_STOCKS
 
@@ -337,18 +350,40 @@ class StocksSavingsPlan(SavingsPlan):
     interest = value - initial_value - rate
 
     # calculate tax on sell
-    tax_paid = 0 # sum(e.tax for e in self[:-1])
-    interest_tax_paid = 0 # sum(e.V_for_tax for e in self[:-1])
+    tax_paid = self[-1]["tax_cum"]
+    interest_tax_paid = self[-1]["int_tax_paid_cum"]
     interest_to_tax = interest + self[-1]["interest_cum"] - interest_tax_paid
     interest_to_tax = max(0.00, interest_to_tax * self.tax_info.fraction_to_tax - self.tax_info.tax_free)
     tax_on_sell = -interest_to_tax * self.tax_info.tax_rate
     V_after_tax = value + tax_on_sell + tax_paid
 
+    if from_month.month == 12:
+      # the year has finished - calculate the Vorabpauschale
+      year_entries = self.get_current_year_entries()
+
+      cur_year_interest = sum(e["interest"] for e in year_entries) + interest
+
+      vorabpauschale_begin = ((12 - year_entries[0]["start"].month + 1) / 12 * year_entries[0]["V_start"]
+                              * self.tax_info.basis_interest_factor)
+      vorabpauschale_rates = (sum((12 - e["start"].month + 1) / 12 * e["rate"] for e in year_entries)
+                              + 1 / 12 * rate
+                             ) * self.tax_info.basis_interest_factor
+      vorabpauschale = vorabpauschale_begin + vorabpauschale_rates
+
+      interest_to_tax = min(vorabpauschale, max(0.00, cur_year_interest))
+      interest_part_for_tax = interest_to_tax * self.tax_info.fraction_to_tax
+      tax = -max(0.00, interest_part_for_tax - self.tax_info.tax_free) * self.tax_info.tax_rate
+    else:
+      interest_to_tax = 0.0
+      tax = 0.0
+
     self.append(self.MonthEntry(start=start,
                                 V_start=initial_value,
                                 V_end=value, V_net=V_after_tax,
+                                #fac=value/(self[0]["V_start"]+self[-1]["rate_cum"]+rate),
                                 rate=rate, interest=interest,
-                                tax=0.0, tax_sell=tax_on_sell,
+                                tax=tax, tax_sell=tax_on_sell,
+                                int_tax_paid=interest_to_tax,
                                 prev=self[-1]))
     return self[-1]
 
@@ -477,4 +512,4 @@ if False:
   #).year_steps(10).plot()
 
 
-StocksSavingsPlan("savings", 100_000.00, 1000.00, p_year=5.0, start=Month(2020, 1)).year_steps(10).print_years()
+StocksSavingsPlan("savings", 100_000.00, 1100.00, p_year=5.0, start=Month(2020, 1)).year_steps(30).print_years()
