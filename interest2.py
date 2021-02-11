@@ -214,8 +214,12 @@ class AnnuityLoan(MonthHistory):
   class MonthEntry(MonthEntryBase):
     FLOAT_ATTRIBUTES_CUM = ["rate", "interest"]
 
+  def __init__(self, *args, p_year, **kwargs):
+    super().__init__(*args, **kwargs)
+    self.p_year = p_year
+
   def grow_factor(self, start):
-    return 1.0 + (0.05/12)
+    return 1.0 + (self.p_year/100/12)
 
   def month_step(self, from_month):
     if self.finished:
@@ -491,25 +495,16 @@ class Parallel(MonthHistory):
   # ^^^^^^^^^^ output ^^^^^^^^^^
 
 
-if False:
-  plan = Parallel(
-    "Price: 550k, Capital: 91_800.00, run time: 15a",
-    date(2021, 1),
-    AnnuityLoan("bank", -394_868.00, 1.00, 981.00, 15),
-    Chain("KfW", AnnuityLoan(-100_000.00, 0.67, 375.00, 12, 10),
-                 AnnuityLoan(None, 1.67, 375.00, 5)),
-  )
 
-
-if False:
+if True:
   Parallel(
     "parallel plan",
     start=Month(2020, 1),
-    plans=[AnnuityLoan("SPK", -200_000.00, 1000.00, start=Month(2021, 1)),
-           AnnuityLoan("ING", -100_000.00, 1000.00),
-           SavingsPlan("savings", 100_000.00, 1000.00, p_year=5.0, start=Month(2020, 1))],
-  ).year_steps(10).print_years()
+    plans=[AnnuityLoan("SPK", -380_800.00, 1_311.00, p_year=1.15, start=Month(2021, 1)),
+           StocksSavingsPlan("ETF", 57_000.00, 653.00, p_year=5.0, start=Month(2021, 1))],
+  ).year_steps(21).print_years()
   #).year_steps(10).plot()
 
 
-StocksSavingsPlan("savings", 100_000.00, 1100.00, p_year=5.0, start=Month(2020, 1)).year_steps(30).print_years()
+if False:
+  StocksSavingsPlan("savings", 100_000.00, 1100.00, p_year=5.0, start=Month(2020, 1)).year_steps(30).print_years()

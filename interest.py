@@ -134,7 +134,7 @@ class History(HistoryBase):
   def __init__(self, V_0, p_year, rate,
                years=None, month_offset = 0,
                total_interest_start=0.00, total_rate_start=0.00,
-               tax_rate=0.26375, tax_free=1_602.00,
+               tax_rate=0.25, tax_free=1_602.00,
                payment_at_period_start=True):
     super().__init__(V_0, month_offset, total_interest_start, total_rate_start)
 
@@ -445,7 +445,7 @@ class FinancialPlan:
       self.print_all()
     self.print_summary()
 
-  def print_all(self):
+  def print_all(self, only_summary=False):
     for name, plan in self.plans.items():
       if not only_summary:
         print("***", name)
@@ -491,11 +491,21 @@ class FinancialPlan:
 #      SavingsPlan(None, 1.01, 1001.00, 10)).print_years()
 
 #StocksSavingsPlanDataBased(45_000.00, 0.0, 1_100.00, 15, tax_free=1602.00).print_years()
-#StocksSavingsPlan(45_000.00, 3.0, 710.00, 15, tax_free=1602.00).print_years()
+
+#StocksSavingsPlan(100_000.00, 5.0, 1_100.00, 30, tax_free=1602.00).print_years()
 
 #AnnuityLoan(-100_000.00, 0.84, Rate(384.00, 12), 10, payment_at_period_start=True).print_years()
 
 #AnnuityLoan(-296_200.00, 0.87, 1_300.00, 15, payment_at_period_start=False).print()
+
+plan = FinancialPlan(
+  bank=AnnuityLoan(-380_800.00, 1.15, 1_311.00, 20),
+  ETF=StocksSavingsPlan(57_000.00, 5.0, 653.00, 20, tax_free=1602.00)
+)
+plan.print_years()
+plan.print()
+
+import sys; sys.exit()
 
 # Matthias-Claudius-Straße (30a)
 if True:
