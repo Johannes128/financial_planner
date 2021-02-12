@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import altair as alt
 
-from interest2 import Month, StocksSavingsPlan, AnnuityLoan, Parallel
+from interest2 import Month, StocksSavingsPlan, AnnuityLoan, Parallel, TAX_INFO_STOCKS
 
 
 def get_spread(plans, V_keys=("V_end",)):
@@ -40,10 +40,12 @@ TODO: respect marriage state, plot age, make start selectable, use historic inde
   rate = col2.number_input("Enter monthly rate", 0.0, 1000_000_000.00, 1_350.00, step=50.00)
   start = Month(2022, 1)
   runtime_years = col3.number_input("Desired runtime", 1, 100, 30)
+  tax_variants = list(TAX_INFO_STOCKS.keys())
+  tax_variant = col1.selectbox("Tax variant", tax_variants, index=tax_variants.index("married"))
 
   etf_interest_rates = st.multiselect("ETF interest rates", list(range(0, 21)), default=list(range(0, 10, 1)))
 
-  plans = [StocksSavingsPlan("ETF_{:02d}%".format(p), V_0, rate, p_year=p, start=start).year_steps(runtime_years)
+  plans = [StocksSavingsPlan("ETF_{:02d}%".format(p), V_0, rate, p_year=p, start=start, tax_info=tax_variant).year_steps(runtime_years)
            for p in etf_interest_rates]
 
   V_keys = ["V_end", "V_net", "interest_cum", "tax_cum", "tax_sell"]

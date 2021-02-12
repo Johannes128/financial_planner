@@ -278,9 +278,9 @@ TAX_INFO_REGULAR = {
   "married": TaxInfo(0.25, 1_602.00)
 }
 TAX_INFO_STOCKS = {
-  "single_with_soli": TaxInfo(0.26375, 1_602.00, 0.7),
+  "single_with_soli": TaxInfo(0.26375, 801.00, 0.7),
   "married_with_soli": TaxInfo(0.26375, 1_602.00, 0.7),
-  "single": TaxInfo(0.25, 1_602.00, 0.7),
+  "single": TaxInfo(0.25, 801.00, 0.7),
   "married": TaxInfo(0.25, 1_602.00, 0.7)
 }
 
@@ -403,6 +403,10 @@ class StocksSavingsPlan(SavingsPlan):
                                 int_tax_paid=interest_to_tax,
                                 prev=self[-1]))
     return self[-1]
+
+
+class StocksSavingsPlanDataDriven:
+  pass
 
 
 class Chain(MonthHistory):
