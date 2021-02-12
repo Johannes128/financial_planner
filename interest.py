@@ -490,7 +490,9 @@ class FinancialPlan:
 #Chain(SavingsPlan(10_000.00, 1.00, 100.00, 10),
 #      SavingsPlan(None, 1.01, 1001.00, 10)).print_years()
 
-#StocksSavingsPlanDataBased(45_000.00, 0.0, 1_100.00, 15, tax_free=1602.00).print_years()
+StocksSavingsPlanDataBased(45_000.00, 0.0, 1_100.00, 15, tax_free=1602.00).print_years()
+
+import sys; sys.exit()
 
 #StocksSavingsPlan(100_000.00, 5.0, 1_100.00, 30, tax_free=1602.00).print_years()
 

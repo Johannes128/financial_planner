@@ -177,18 +177,31 @@ class MonthHistory(list):
   def table_header(self, level="ALL"):
     return self.MonthEntry.get_show_attributes(level)
 
-  def to_table(self, entries, level="ALL"):
+  def to_table(self, entries=None, level="ALL", include_header=False):
+    entries = (self if entries is None else entries)
     attributes = self.table_header(level)
-    return [[entry.get(attr, 0.00) for attr in attributes]
-            for entry in entries]
+    table = [[entry.get(attr, 0.00) for attr in attributes]
+             for entry in entries]
+    if include_header:
+      table = [self.table_header(level)] + table
+    return table
 
-  def to_string(self, entries, level="ALL"):
+  def to_dataframe(self, entries=None, level="ALL"):
+    import pandas as pd
+    table = self.to_table(entries)
+    df = pd.DataFrame(table, columns=self.table_header(level))
+    return df.set_index("start")
+
+  def to_string(self, entries=None, level="ALL"):
     table = self.to_table(entries, level)
     return "\n".join([
       f"*** {self.description}",
       tabulate.tabulate(table, floatfmt=TABLULATE_FLOAT_FMT,
                         headers=self.table_header(level))
     ])
+
+  def to_year_dataframe(self, level="ALL"):
+    return self.to_dataframe(self.get_year_summaries(), level)
 
   def print(self, level="ALL"):
     print(self.to_string(self, level))
@@ -496,15 +509,17 @@ class Parallel(MonthHistory):
 
 
 
-if True:
-  Parallel(
-    "parallel plan",
-    start=Month(2020, 1),
-    plans=[AnnuityLoan("SPK", -380_800.00, 1_311.00, p_year=1.15, start=Month(2021, 1)),
-           StocksSavingsPlan("ETF", 57_000.00, 653.00, p_year=5.0, start=Month(2021, 1))],
-  ).year_steps(21).print_years()
-  #).year_steps(10).plot()
+if __name__ == "__main__":
+
+  if True:
+    Parallel(
+      "parallel plan",
+      start=Month(2020, 1),
+      plans=[AnnuityLoan("SPK", -380_800.00, 1_311.00, p_year=1.15, start=Month(2021, 1)),
+             StocksSavingsPlan("ETF", 57_000.00, 653.00, p_year=5.0, start=Month(2021, 1))],
+    ).year_steps(32).print_years()
+    #).year_steps(10).plot()
 
 
-if False:
-  StocksSavingsPlan("savings", 100_000.00, 1100.00, p_year=5.0, start=Month(2020, 1)).year_steps(30).print_years()
+  if False:
+    StocksSavingsPlan("savings", 100_000.00, 1100.00, p_year=5.0, start=Month(2020, 1)).year_steps(30).print_years()
