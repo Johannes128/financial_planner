@@ -3,25 +3,28 @@ import pandas as pd
 import numpy as np
 import altair as alt
 
-from interest2 import Month, StocksSavingsPlan, AnnuityLoan, Parallel, TAX_INFO_STOCKS
+from interest2 import Month, StocksSavingsPlan, StocksSavingsPlanDataBased, AnnuityLoan, Parallel, TAX_INFO_STOCKS
 
 
 def get_spread(plans, V_keys=("V_end",)):
   plan_dfs = [plan.to_year_dataframe() for plan in plans]
 
   spread_df = {V_key: pd.concat([plan_df[V_key] for plan_df in plan_dfs], axis=1,
-                                keys=[plan.description for plan in plans])
+                                keys=[plan.description for plan in plans]
+                                ).sort_index()
+                                 .interpolate(method="time", limit_direction="both", limit_area="inside", limit=1)
                for V_key in V_keys}
   return spread_df
 
 
 def get_end_distribution(plans, V_keys=("V_end",)):
-  return {V_key: pd.DataFrame({V_key: [plan[-1][V_key] for plan in plans]},
-                      index=[plan.description for plan in plans])
+  value_without_interest = plans[0][-1]["rate_cum"] + plans[0][0]["V_start"]
+  return {V_key: pd.DataFrame({V_key: [plan[-1][V_key] for plan in plans] + [value_without_interest]},
+                              index=[plan.description for plan in plans] + ["#w/o_interest"])
           for V_key in V_keys}
 
 
-section = st.sidebar.radio("Section", ["ETF", "Real Estate"])
+section = st.sidebar.radio("Section", ["ETF", "Real Estate", "Code"])
 
 if section == "ETF":
   st.title("ETF Savings Plan")
@@ -38,19 +41,28 @@ TODO: respect marriage state, plot age, make start selectable, use historic inde
 
   V_0 = col1.number_input("Enter start capital V_0", 0.0, 1000_000_000.00, 100_000.00, step=5_000.00)
   rate = col2.number_input("Enter monthly rate", 0.0, 1000_000_000.00, 1_350.00, step=50.00)
-  start = Month(2022, 1)
+  start = Month(1990, 1)
   runtime_years = col3.number_input("Desired runtime", 1, 100, 30)
   tax_variants = list(TAX_INFO_STOCKS.keys())
   tax_variant = col1.selectbox("Tax variant", tax_variants, index=tax_variants.index("married"))
 
-  etf_interest_rates = st.multiselect("ETF interest rates", list(range(0, 21)), default=list(range(0, 10, 1)))
+  if st.radio("Mode", ["Fixed interest", "Historical"]) == "Fixed interest":
+    etf_interest_rates = st.multiselect("ETF interest rates", list(range(0, 21)), default=list(range(0, 10, 1)))
 
-  plans = [StocksSavingsPlan("ETF_{:02d}%".format(p), V_0, rate, p_year=p, start=start, tax_info=tax_variant).year_steps(runtime_years)
-           for p in etf_interest_rates]
+    plans = [StocksSavingsPlan("ETF_{:02d}%".format(p), V_0, rate, p_year=p, start=start, tax_info=tax_variant).year_steps(runtime_years)
+             for p in etf_interest_rates]
+  else:
+    possible_start_years = [Month(y, 1) for y in range(1970, 2021)]
+    default_start_years = [Month(y, 1) for y in range(1970, 2021-runtime_years, 2)]
+
+    start_times = st.multiselect("Start years", possible_start_years, default=default_start_years)
+    plans = [StocksSavingsPlanDataBased(f"ETF_{s.year:04d}-{s.month:02d}", V_0, rate, start=s, tax_info=tax_variant).year_steps(runtime_years)
+             for s in start_times]
 
   V_keys = ["V_end", "V_net", "interest_cum", "tax_cum", "tax_sell"]
   V_keys_selected = st.multiselect("Values to plot", V_keys, default=["V_end"])
   spread_df = get_spread(plans, V_keys=V_keys_selected)
+
   end_distribution_df = get_end_distribution(plans, V_keys_selected)
 
   for V_key in spread_df.keys():
@@ -111,3 +123,12 @@ elif section == "Real Estate":
 
   #st.header("Raw Plan Data")
   #st.dataframe(plan.to_dataframe().iloc[::-1])
+
+elif section == "Code":
+  with open("app.py") as src_app:
+    st.header("Code of streamlit app:")
+    st.code(src_app.read())
+
+  with open("interest2.py") as src_backend:
+    st.header("Code of backend:")
+    st.code(src_backend.read())

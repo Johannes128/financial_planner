@@ -1,9 +1,13 @@
 import collections
 import copy
-from datetime import date
+import csv
+from datetime import datetime, date
+import functools
 import itertools
 import numbers
 import pprint
+import time
+
 import tabulate
 
 
@@ -16,6 +20,10 @@ def cum_key(key):
 class Month(date):
   def __new__(cls, year, month):
     return date.__new__(cls, year, month, 1)
+
+  @staticmethod
+  def from_date(d : date):
+    return Month(d.year, d.month)
 
   def prev_month(self):
     if self.month > 1:
@@ -189,8 +197,10 @@ class MonthHistory(list):
   def to_dataframe(self, entries=None, level="ALL"):
     import pandas as pd
     table = self.to_table(entries)
-    df = pd.DataFrame(table, columns=self.table_header(level))
-    return df.set_index("start")
+    df = pd.DataFrame(table, columns=self.table_header(level)).set_index("start")
+    df.index = pd.to_datetime(df.index)
+    return df
+
 
   def to_string(self, entries=None, level="ALL"):
     table = self.to_table(entries, level)
@@ -405,8 +415,25 @@ class StocksSavingsPlan(SavingsPlan):
     return self[-1]
 
 
-class StocksSavingsPlanDataDriven:
-  pass
+class StocksSavingsPlanDataBased(StocksSavingsPlan):
+  @staticmethod
+  @functools.lru_cache(100)
+  def load_data(filename : str):
+    with open(filename) as f:
+      def parse_line(l):
+        return [Month.from_date(datetime.strptime(l[0], "%Y-%m-%d").date()), float(l[1])]
+
+      chart_data = [parse_line(l) for i, l in enumerate(csv.reader(f, delimiter=";")) if i > 0]
+      return {line[0]: line[1] for line in chart_data}
+
+
+  def __init__(self, *args, **kwargs):
+    self.chart_data = self.load_data("data/MSCI_World_Performance.csv")
+    super().__init__(*args, **kwargs)
+
+  def grow_factor(self, start):
+    value_start, value_end = self.chart_data[start], self.chart_data[start.next_month()]
+    return value_end/value_start
 
 
 class Chain(MonthHistory):
