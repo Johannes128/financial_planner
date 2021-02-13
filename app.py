@@ -126,9 +126,9 @@ elif section == "Real Estate":
 
 elif section == "Code":
   with open("app.py") as src_app:
-    st.header("Code of streamlit app:")
+    st.header("Code of streamlit app (app.py):")
     st.code(src_app.read())
 
   with open("interest2.py") as src_backend:
-    st.header("Code of backend:")
+    st.header("Code of backend (interest2.py):")
     st.code(src_backend.read())
