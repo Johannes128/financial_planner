@@ -29,8 +29,8 @@ section = st.sidebar.radio("Section", ["ETF", "Real Estate", "Code"])
 if section == "ETF":
   st.title("ETF Savings Plan")
   """
-Simulates an stocks savings plan respecting German tax laws for different average interest rates.
-The Plan with p=0% is a comparison to an savings strategy without any interest. 
+Simulates a stocks savings plan respecting German tax laws for different average interest rates.
+The Plan with p=0% is a comparison to a savings strategy without any interest. 
 * **V_end** is the expected value of the total depot at each time
 * **V_net** is the expected value of the total depot **after tax** at each time 
 
