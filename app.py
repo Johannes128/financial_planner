@@ -34,7 +34,7 @@ The Plan with p=0% is a comparison to an savings strategy without any interest.
 * **V_end** is the expected value of the total depot at each time
 * **V_end** is the expected value of the total depot **after tax** at each time 
 
-TODO: respect marriage state, plot age, make start selectable, use historic index data
+TODO: plot age
 """
 
   col1, col2, col3 = st.beta_columns(3)
