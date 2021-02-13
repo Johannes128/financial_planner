@@ -26,13 +26,12 @@ def get_end_distribution(plans, V_keys=("V_end",)):
 
 
 section = st.sidebar.radio("Section", ["ETF Savings Plan", "Real Estate Financing", "Code"])
+st.title(section)
 
 disclaimer = "**Disclaimer**: This is work in progress. I do not take any responsibility for the correctness of any provided data. 😅"
+st.write(disclaimer)
 
 if section == "ETF Savings Plan":
-  st.title("ETF Savings Plan")
-  st.write(disclaimer)
-
   col1, col2, col3 = st.beta_columns(3)
 
   V_0 = col1.number_input("Start Capital V_0", 0.0, 1000_000_000.00, 100_000.00, step=5_000.00)
@@ -100,9 +99,6 @@ It is intended to provide an overview of the interest spread when starting the i
       st.dataframe(spread_df[V_key].iloc[::-1])
 
 elif section == "Real Estate Financing":
-  st.title("Real Estate Financing")
-  st.write(disclaimer)
-
   col1, col2, col3 = st.beta_columns(3)
 
   price = col1.number_input("Price", 0.0, 1000_000_000.00, 450_000.00, step=10_000.00)
