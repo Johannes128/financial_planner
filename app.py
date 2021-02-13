@@ -20,39 +20,45 @@ def get_spread(plans, V_keys=("V_end",)):
 def get_end_distribution(plans, V_keys=("V_end",)):
   value_without_interest = plans[0][-1]["rate_cum"] + plans[0][0]["V_start"]
   return {V_key: pd.DataFrame({V_key: [plan[-1][V_key] for plan in plans] + [value_without_interest]},
-                              index=[plan.description for plan in plans] + ["#w/o_interest"])
+                              index=[plan.description for plan in plans] + ["#total_payments"])
           for V_key in V_keys}
 
 
 section = st.sidebar.radio("Section", ["ETF", "Real Estate", "Code"])
 
+disclaimer = "**Disclaimer**: This is work in progress. I do not take any responsibility for the correctness of any provided data. 😅"
+
 if section == "ETF":
   st.title("ETF Savings Plan")
-  """
-Simulates a stocks savings plan respecting German tax laws for different average interest rates.
-The Plan with p=0% is a comparison to a savings strategy without any interest. 
-* **V_end** is the expected value of the total depot at each time
-* **V_net** is the expected value of the total depot **after tax** at each time 
-
-TODO: plot age
-"""
+  st.write(disclaimer)
 
   col1, col2, col3 = st.beta_columns(3)
 
-  V_0 = col1.number_input("Enter start capital V_0", 0.0, 1000_000_000.00, 100_000.00, step=5_000.00)
-  rate = col2.number_input("Enter monthly rate", 0.0, 1000_000_000.00, 1_350.00, step=50.00)
+  V_0 = col1.number_input("Start Capital V_0", 0.0, 1000_000_000.00, 100_000.00, step=5_000.00)
+  rate = col2.number_input("Monthly Rate", 0.0, 1000_000_000.00, 1_350.00, step=50.00)
   start = Month(1990, 1)
-  runtime_years = col3.number_input("Desired runtime", 1, 100, 30)
+  runtime_years = col3.number_input("Runtime [years]", 1, 100, 30)
   tax_variants = list(TAX_INFO_STOCKS.keys())
-  tax_variant = col1.selectbox("Tax variant", tax_variants, index=tax_variants.index("married"))
+  tax_variant = col1.selectbox("Tax Variant", tax_variants, index=tax_variants.index("married"))
+  #basis_tax_rate = col2.number_input("Basis Tax Rate [%]", 0.0, 50.0, 0.5, step=0.1)
 
-  etf_mode = st.radio("Mode", ["Fixed interest", "Historical"])
-  if etf_mode == "Fixed interest":
-    etf_interest_rates = st.multiselect("ETF interest rates", list(range(0, 21)), default=list(range(0, 10, 1)))
+  etf_mode = st.radio("Mode", ["Fixed Interest Rate", "Historical Performance"])
+  if etf_mode == "Fixed Interest Rate":
+    """
+This mode simulates a stocks savings plan respecting German tax laws for different average interest rates.
+The Plan with p=0% is a comparison to a savings strategy without any interest. 
+    """
+
+    etf_interest_rates = st.multiselect("ETF Interest Rates [%]", list(range(0, 21)), default=list(range(0, 10, 1)))
 
     plans = [StocksSavingsPlan("ETF_{:02d}%".format(p), V_0, rate, p_year=p, start=start, tax_info=tax_variant).year_steps(runtime_years)
              for p in etf_interest_rates]
   else:
+    """
+This mode simulates a stocks savings plan respecting German tax laws based on historical index performance.
+It is intended to provide an overview of the interest spread when starting the investment at different times.
+    """
+
     stocks_index = st.selectbox("Index", ["MSCI World"], index=0)
 
     possible_start_years = list(range(1970, 2021-runtime_years, 1))
@@ -65,6 +71,15 @@ TODO: plot age
 
   V_keys = ["V_end", "V_net", "interest_cum", "tax_cum", "tax_sell"]
   V_keys_selected = st.multiselect("Values to plot", V_keys, default=["V_end"])
+  """
+* **V_end** is the expected value of the total depot at each time
+* **V_net** is the expected value of the total depot **after tax** at each time
+* **interest_cum** is the depot value excluding the starting capital and all monthly rates
+* **tax_cum** are the cumulated tax payments at each year **without** selling
+* **tax_sell** is the tax payment due on selling the whole depot content
+  """
+  show_data = st.checkbox("Show raw data table")
+
   spread_df = get_spread(plans, V_keys=V_keys_selected)
 
   end_distribution_df = get_end_distribution(plans, V_keys_selected)
@@ -73,10 +88,12 @@ TODO: plot age
     st.header(V_key)
     st.line_chart(spread_df[V_key])
     st.bar_chart(end_distribution_df[V_key])
-    st.dataframe(spread_df[V_key].iloc[::-1])
+    if show_data:
+      st.dataframe(spread_df[V_key].iloc[::-1])
 
 elif section == "Real Estate":
   st.title("Real Estate Financing")
+  st.write(disclaimer)
 
   col1, col2, col3 = st.beta_columns(3)
 
