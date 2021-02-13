@@ -12,7 +12,7 @@ def get_spread(plans, V_keys=("V_end",)):
   spread_df = {V_key: pd.concat([plan_df[V_key] for plan_df in plan_dfs], axis=1,
                                 keys=[plan.description for plan in plans]
                                 ).sort_index()
-                                 .interpolate(method="time", limit_direction="both", limit_area="inside", limit=1)
+                                 .interpolate(method="time", limit_direction="both", limit_area="inside")
                for V_key in V_keys}
   return spread_df
 
@@ -32,7 +32,7 @@ if section == "ETF":
 Simulates an stocks savings plan respecting German tax laws for different average interest rates.
 The Plan with p=0% is a comparison to an savings strategy without any interest. 
 * **V_end** is the expected value of the total depot at each time
-* **V_end** is the expected value of the total depot **after tax** at each time 
+* **V_net** is the expected value of the total depot **after tax** at each time 
 
 TODO: plot age
 """
@@ -46,16 +46,20 @@ TODO: plot age
   tax_variants = list(TAX_INFO_STOCKS.keys())
   tax_variant = col1.selectbox("Tax variant", tax_variants, index=tax_variants.index("married"))
 
-  if st.radio("Mode", ["Fixed interest", "Historical"]) == "Fixed interest":
+  etf_mode = st.radio("Mode", ["Fixed interest", "Historical"])
+  if etf_mode == "Fixed interest":
     etf_interest_rates = st.multiselect("ETF interest rates", list(range(0, 21)), default=list(range(0, 10, 1)))
 
     plans = [StocksSavingsPlan("ETF_{:02d}%".format(p), V_0, rate, p_year=p, start=start, tax_info=tax_variant).year_steps(runtime_years)
              for p in etf_interest_rates]
   else:
-    possible_start_years = [Month(y, 1) for y in range(1970, 2021)]
-    default_start_years = [Month(y, 1) for y in range(1970, 2021-runtime_years, 2)]
+    stocks_index = st.selectbox("Index", ["MSCI World"], index=0)
 
-    start_times = st.multiselect("Start years", possible_start_years, default=default_start_years)
+    possible_start_years = list(range(1970, 2021-runtime_years, 1))
+    start_years = st.multiselect("Start years", possible_start_years, default=possible_start_years)
+    start_months = st.multiselect("Start months", list(range(1, 13)), [1, 7])
+
+    start_times = [Month(y, m) for y in start_years for m in start_months]
     plans = [StocksSavingsPlanDataBased(f"ETF_{s.year:04d}-{s.month:02d}", V_0, rate, start=s, tax_info=tax_variant).year_steps(runtime_years)
              for s in start_times]
 
