@@ -1,3 +1,4 @@
+from contexttimer import timer
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -51,8 +52,11 @@ The Plan with p=0% is a comparison to a savings strategy without any interest.
 
     etf_interest_rates = st.multiselect("ETF Interest Rates [%]", list(range(0, 21)), default=list(range(0, 10, 1)))
 
-    plans = [StocksSavingsPlan("ETF_{:02d}%".format(p), V_0, rate, p_year=p, start=start, tax_info=tax_variant).year_steps(runtime_years)
-             for p in etf_interest_rates]
+    @timer()
+    def simulate_plans():
+      return [StocksSavingsPlan("ETF_{:02d}%".format(p), V_0, rate, p_year=p, start=start, tax_info=tax_variant).year_steps(runtime_years)
+              for p in etf_interest_rates]
+    plans = simulate_plans()
   else:
     """
 This mode simulates a stocks savings plan respecting German tax laws based on historical index performance.
@@ -66,8 +70,12 @@ It is intended to provide an overview of the interest spread when starting the i
     start_months = st.multiselect("Start months", list(range(1, 13)), [1, 7])
 
     start_times = [Month(y, m) for y in start_years for m in start_months]
-    plans = [StocksSavingsPlanDataBased(f"ETF_{s.year:04d}-{s.month:02d}", V_0, rate, start=s, tax_info=tax_variant).year_steps(runtime_years)
-             for s in start_times]
+
+    @timer()
+    def simulate_plans():
+      return [StocksSavingsPlanDataBased(f"ETF_{s.year:04d}-{s.month:02d}", V_0, rate, start=s, tax_info=tax_variant).year_steps(runtime_years)
+              for s in start_times]
+    plans = simulate_plans()
 
   V_keys = ["V_end", "V_net", "interest_cum", "tax_cum", "tax_sell"]
   V_keys_selected = st.multiselect("Values to plot", V_keys, default=["V_end"])

@@ -8,6 +8,7 @@ import numbers
 import pprint
 import time
 
+from contexttimer import timer
 import tabulate
 
 
@@ -419,12 +420,14 @@ class StocksSavingsPlanDataBased(StocksSavingsPlan):
   @staticmethod
   @functools.lru_cache(100)
   def load_data(filename : str):
-    with open(filename) as f:
-      def parse_line(l):
-        return [Month.from_date(datetime.strptime(l[0], "%Y-%m-%d").date()), float(l[1])]
-
-      chart_data = [parse_line(l) for i, l in enumerate(csv.reader(f, delimiter=";")) if i > 0]
+    @timer()
+    def _load_data():
+      with open(filename) as f:
+        def parse_line(l):
+          return [Month.from_date(datetime.strptime(l[0], "%Y-%m-%d").date()), float(l[1])]
+        chart_data = [parse_line(l) for i, l in enumerate(csv.reader(f, delimiter=";")) if i > 0]
       return {line[0]: line[1] for line in chart_data}
+    return _load_data()
 
 
   def __init__(self, *args, **kwargs):
