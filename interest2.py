@@ -1,12 +1,15 @@
 import collections
 import copy
 import csv
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import functools
 import itertools
+from math import log
 import numbers
 import pprint
 import time
+import scipy as sp
+import scipy.optimize
 
 from contexttimer import timer
 import tabulate
@@ -16,6 +19,10 @@ TABLULATE_FLOAT_FMT = "6_.2f"
 
 def cum_key(key):
   return key + "_cum"
+
+
+year_timedelta = timedelta(days=365)
+month_timedelta = timedelta(days=365/12)
 
 
 class Month(date):
@@ -89,9 +96,14 @@ class MonthEntryBase(dict):
     if "start" not in self:
       self["start"] = Month(1, 1)
 
-    for key in itertools.chain(self.FLOAT_ATTRIBUTES_GENERAL, self.FLOAT_ATTRIBUTES_CUM):
+    for key in self.FLOAT_ATTRIBUTES_GENERAL:
+      if key not in self:
+        self[key] = float("nan")
+
+    for key in self.FLOAT_ATTRIBUTES_CUM:
       if key not in self:
         self[key] = 0.00
+
 
     if prev is None:
       for key in self.FLOAT_ATTRIBUTES_CUM:
@@ -148,6 +160,14 @@ class MonthHistory(list):
       else:
         break
     return list(reversed(year_entries))
+
+  def elapsed_years(self, start):
+    return (start-self[0]["start"]) / year_timedelta
+
+  def elapsed_months(self, start):
+    #return (start-self[0]["start"]) / month_timedelta
+    initial_start = self[0]["start"]
+    return (start.year - initial_start.year) * 12 + start.month - initial_start.month
 
   def month_step(self, from_month):
     raise NotImplementedError
@@ -301,6 +321,7 @@ class SavingsPlan(MonthHistory):
   #       * Zinsperioden: jährlich, >monatlich<, ...
 
   class MonthEntry(MonthEntryBase):
+    FLOAT_ATTRIBUTES_GENERAL = ["V_start", "V_end", "V_net", "interest_eff"]
     FLOAT_ATTRIBUTES_CUM = ["rate", "interest", "tax"]
 
   TAX_INFO_MAP = TAX_INFO_REGULAR
@@ -319,6 +340,25 @@ class SavingsPlan(MonthHistory):
 
   def grow_factor(self, start):
     return 1.0 + (self.p_year/100/12)
+
+  def effective_grow_percentage(self, V_0, rate_cum, V_E, num_months):
+    avg_rate = rate_cum / num_months
+
+    # TODO: this implcitly assumes that the rate is paid at the end of each month
+    def h_positive(q):
+      return log(V_0*q + avg_rate) + num_months * log(1+q) - log( avg_rate + q*V_E)
+
+    def h_negative(q):
+      return ( q*V_0 + avg_rate ) * (1 + q) ** num_months - q*V_E - avg_rate
+
+    if V_0 + rate_cum < V_E:
+      sol = sp.optimize.root_scalar(h_positive, method="brentq", bracket=[1e-10, 2.0])
+    else:
+      sol = sp.optimize.root_scalar(h_negative, method="brentq", bracket=[-1.5, -1e-10])
+
+    # the result is the interest rate per month, so convert it to a year interest rate
+    return 100 * ((1+sol.root)**12 - 1)
+
 
   def month_step(self, from_month):
     if self.finished:
@@ -343,10 +383,20 @@ class SavingsPlan(MonthHistory):
     tax = -self.tax_info.effective_tax_rate * value_for_tax
     value += tax
 
+    # TODO: refactor
+    if start.month == 1:
+      interest_effective = self.effective_grow_percentage(self[0]["V_start"],
+                                                          self[-1]["rate_cum"]+rate,
+                                                          value,
+                                                          self.elapsed_months(start))
+    else:
+      interest_effective = float("nan")
+
     self.append(self.MonthEntry(start=start,
                                 V_start=initial_value,
                                 V_end=value, V_net=value,
                                 rate=rate, interest=interest,
+                                interest_eff=interest_effective,
                                 tax=tax,
                                 prev=self[-1]))
     return self[-1]
@@ -354,7 +404,7 @@ class SavingsPlan(MonthHistory):
 
 class StocksSavingsPlan(SavingsPlan):
   class MonthEntry(SavingsPlan.MonthEntry):
-    FLOAT_ATTRIBUTES_GENERAL = ["V_start", "V_end", "V_net", "tax_sell"]
+    FLOAT_ATTRIBUTES_GENERAL = ["V_start", "V_end", "V_net", "tax_sell", "interest_eff"]
     FLOAT_ATTRIBUTES_CUM = ["rate", "interest", "tax", "int_tax_paid"]
 
   TAX_INFO_MAP = TAX_INFO_STOCKS
@@ -405,11 +455,21 @@ class StocksSavingsPlan(SavingsPlan):
       interest_to_tax = 0.0
       tax = 0.0
 
+    # TODO: refactor
+    if start.month == 12:
+      interest_effective = self.effective_grow_percentage(self[0]["V_start"],
+                                                          self[-1]["rate_cum"]+rate,
+                                                          value,
+                                                          self.elapsed_months(start))
+    else:
+      interest_effective = float("nan")
+
     self.append(self.MonthEntry(start=start,
                                 V_start=initial_value,
                                 V_end=value, V_net=V_after_tax,
                                 #fac=value/(self[0]["V_start"]+self[-1]["rate_cum"]+rate),
                                 rate=rate, interest=interest,
+                                interest_eff=interest_effective,
                                 tax=tax, tax_sell=tax_on_sell,
                                 int_tax_paid=interest_to_tax,
                                 prev=self[-1]))
