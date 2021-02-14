@@ -80,7 +80,7 @@ It is intended to provide an overview of the interest spread when starting the i
   V_keys_selected = st.multiselect("Values to plot", V_keys, default=["V_end"])
   """
 * **V_end** is the expected value of the total depot at each time
-* **V_net** is the expected value of the total depot **after tax** at each time
+* **V_net** is the expected value of the total depot **after sell tax** at each time
 * **interest_cum** is the depot value excluding the starting capital and all monthly rates
 * **tax_cum** are the cumulated tax payments at each year **without** selling
 * **tax_sell** is the tax payment due on selling the whole depot content
@@ -113,6 +113,8 @@ elif section == "Real Estate Financing":
 
   etf_interest_rates = st.multiselect("ETF interest rates", list(range(0,21)), default=list(range(0,10,2)))
 
+  show_data = st.checkbox("Show raw data table")
+
   buy_costs = price * buy_costs_rate/100
   total_price = price + buy_costs
   loan_value = total_price - eigenkapital
@@ -138,13 +140,15 @@ elif section == "Real Estate Financing":
            for p in etf_interest_rates]
 
   V_keys = ["V_end", "V_net", "rate_cum"]
+  V_keys_default = ["V_end", "V_net"]
   V_keys_selected = V_keys=st.multiselect("Values to plot", V_keys, default=V_keys)
   spread_df = get_spread(plans, V_keys_selected)
 
   for V_key in spread_df.keys():
     st.header(V_key)
     st.line_chart(spread_df[V_key])
-    st.dataframe(spread_df[V_key].iloc[::-1])
+    if show_data:
+      st.dataframe(spread_df[V_key].iloc[::-1])
 
   #st.header("Raw Plan Data")
   #st.dataframe(plan.to_dataframe().iloc[::-1])
