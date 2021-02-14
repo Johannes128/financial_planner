@@ -8,8 +8,12 @@ from math import log
 import numbers
 import pprint
 import time
-import scipy as sp
-import scipy.optimize
+
+INCLUDE_INTEREST_EFFECITVE = False
+
+if INCLUDE_INTEREST_EFFECITVE:
+  import scipy as sp
+  import scipy.optimize
 
 from contexttimer import timer
 import tabulate
@@ -342,6 +346,9 @@ class SavingsPlan(MonthHistory):
     return 1.0 + (self.p_year/100/12)
 
   def effective_grow_percentage(self, V_0, rate_cum, V_E, num_months):
+    if not INCLUDE_INTEREST_EFFECITVE:
+      return float("nan")
+
     avg_rate = rate_cum / num_months
 
     # TODO: this implcitly assumes that the rate is paid at the end of each month

@@ -18,10 +18,10 @@ def get_spread(plans, V_keys=("V_end",)):
   return spread_df
 
 
-def get_end_distribution(plans, V_keys=("V_end",)):
+def get_end_distribution(plans, V_keys=("V_end",), V_keys_percentage=("interest_eff",)):
   value_without_interest = plans[0][-1]["rate_cum"] + plans[0][0]["V_start"]
-  return {V_key: pd.DataFrame({V_key: [plan[-1][V_key] for plan in plans] + [value_without_interest]},
-                              index=[plan.description for plan in plans] + ["#total_payments"])
+  return {V_key: pd.DataFrame({V_key: [plan[-1][V_key] for plan in plans] + ([value_without_interest] if V_key not in V_keys_percentage else [])},
+                              index=[plan.description for plan in plans] + (["#total_payments"] if V_key not in V_keys_percentage else []))
           for V_key in V_keys}
 
 
@@ -76,8 +76,8 @@ It is intended to provide an overview of the interest spread when starting the i
               for s in start_times]
     plans = simulate_plans()
 
-  V_keys = ["V_end", "V_net", "interest_cum", "tax_cum", "tax_sell"]
-  V_keys_selected = st.multiselect("Values to plot", V_keys, default=["V_end"])
+  V_keys = ["V_end", "V_net", "interest_cum", "tax_cum", "tax_sell", "interest_eff"]
+  V_keys_selected = st.multiselect("Values to plot", V_keys, default=["V_end"]) #, "interest_eff"])
   """
 * **V_end** is the expected value of the total depot at each time
 * **V_net** is the expected value of the total depot **after sell tax** at each time
@@ -92,13 +92,16 @@ It is intended to provide an overview of the interest spread when starting the i
   end_distribution_df = get_end_distribution(plans, V_keys_selected)
 
   for V_key in spread_df.keys():
-    st.header(V_key)
+    st.header(f"*{V_key}*")
     st.line_chart(spread_df[V_key])
+    st.header(f"End Distribution of *{V_key}*")
     st.bar_chart(end_distribution_df[V_key])
     if show_data:
       st.dataframe(spread_df[V_key].iloc[::-1])
 
 elif section == "Real Estate Financing":
+  st.write("**Important**: This section still needs alot of love... Please be careful when interpreting the results!")
+
   col1, col2, col3 = st.beta_columns(3)
 
   price = col1.number_input("Price", 0.0, 1000_000_000.00, 450_000.00, step=10_000.00)
@@ -145,7 +148,7 @@ elif section == "Real Estate Financing":
   spread_df = get_spread(plans, V_keys_selected)
 
   for V_key in spread_df.keys():
-    st.header(V_key)
+    st.header(f"*{V_key}*")
     st.line_chart(spread_df[V_key])
     if show_data:
       st.dataframe(spread_df[V_key].iloc[::-1])
