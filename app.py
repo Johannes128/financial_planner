@@ -72,8 +72,13 @@ It is intended to provide an overview of the interest spread when starting the i
 
     @timer()
     def simulate_plans():
-      return [StocksSavingsPlanDataBased(f"ETF_{s.year:04d}-{s.month:02d}", V_0, rate, start=s, tax_info=tax_variant).year_steps(runtime_years)
-              for s in start_times]
+      progress_bar = st.progress(0.0)
+      result = []
+      for s in start_times:
+        result.append(StocksSavingsPlanDataBased(f"ETF_{s.year:04d}-{s.month:02d}", V_0, rate, start=s, tax_info=tax_variant).year_steps(runtime_years))
+        progress_bar.progress(len(result)/len(start_times))
+      progress_bar.empty()
+      return result
     plans = simulate_plans()
 
   V_keys = ["V_end", "V_net", "interest_cum", "tax_cum", "tax_sell", "interest_eff"]
@@ -86,13 +91,14 @@ It is intended to provide an overview of the interest spread when starting the i
 * **tax_sell** is the tax payment due on selling the whole depot content
 * **interest_eff** is the interest rate of a savings plan with fixed interest rate that would have resulted in the same depot value at the given time (same $V_0$, average rate per month)
   """
-  expl = st.beta_expander("Detailed Explanation")
-  expl.write("**interest_eff**")
-  expl.write("The effective interest rate uses the average rate obtained as follows:")
-  expl.latex(r"\text{rate\_avg} = \frac{1}{|\text{Months}|} \sum_{m = 1}^{|\text{Months}|} \text{rate}(\text{month}_m)")
-  expl.write("Then it finds the monthly interest rate $q$ such that")
-  expl.latex(r"V_\text{end} = V_0 \cdot (1+q)^{|\text{Months}|} + \text{rate\_avg} \cdot \sum_{m = 1}^{|\text{Months}|} (1+q)^m.")
-  expl.write("The final value $p$ is then obtained by $p = (1+q)^{12}$.")
+  explanation = st.beta_expander("Detailed Explanation")
+  with explanation:
+    "**interest_eff**"
+    "The effective interest rate uses the average rate obtained as follows:"
+    explanation.latex(r"\text{rate\_avg} = \frac{1}{|\text{Months}|} \sum_{m = 1}^{|\text{Months}|} \text{rate}(\text{month}_m)")
+    "Then it finds the monthly interest rate $q$ such that"
+    explanation.latex(r"V_\text{end} = V_0 \cdot (1+q)^{|\text{Months}|} + \text{rate\_avg} \cdot \sum_{m = 1}^{|\text{Months}|} (1+q)^m.")
+    "The final value $p$ is then obtained by $p = (1+q)^{12}$."
 
   show_data = st.checkbox("Show raw data table")
 
@@ -162,29 +168,29 @@ elif section == "Real Estate Financing":
     if show_data:
       st.dataframe(spread_df[V_key].iloc[::-1])
 
-  #st.header("Raw Plan Data")
-  #st.dataframe(plan.to_dataframe().iloc[::-1])
 
 elif section == "Documentation":
   st.write("Here, random documentation of some implementation details is collected.")
 
-  st.header("Effective Interest Rate")
-  # TODO: remove double definition of general explanations
-  "This is the interest rate of a savings plan with fixed interest rate that would have resulted in the same depot value at the given time (same $V_0$, average rate per month)"
-  "The effective interest rate uses the average rate obtained as follows:"
-  st.latex(r"\text{rate\_avg} = \frac{1}{|\text{Months}|} \sum_{m = 1}^{|\text{Months}|} \text{rate}(\text{month}_m)")
-  "Then it finds the monthly interest rate *q* such that"
-  st.latex(r"V_\text{end} = V_0 \cdot (1+q)^{|\text{Months}|} + \text{rate\_avg} \cdot \sum_{m = 1}^{|\text{Months}|} (1+q)^m.")
-  "The final value $p$ is then obtained by $p = (1+q)^{12}$."
-  "The right-hand side of the above formula can be transformed to"
-  st.latex(r"V_0 \cdot (1+q)^{|\text{Months}|} + \text{rate\_avg} \cdot \sum_{m = 0}^{|\text{Months}|} (1+q)^m - \text{rate\_avg}")
-  st.latex(r"V_0 \cdot (1+q)^{|\text{Months}|} + \text{rate\_avg} \cdot \frac{(1+q)^{|\text{Months}|+1}-(1+q)}{q}")
-  st.latex(r"(1+q)^{|\text{Months}|} \cdot \left( V_0 + \frac{\text{rate\_avg} \cdot (1+q)}{q} \right) - \text{rate\_avg} \cdot \frac{(1+q)}{q}")
-  r"As a result, multiplying the equation for $V_\text{end}$ by $q$ yields"
-  st.latex(r"q V_\text{end} + \text{rate\_avg} \cdot (1+q) = (1+q)^{|\text{Months}|} \cdot \left( qV_0 + \text{rate\_avg} \cdot (1+q) \right)")
-  "Solving this high-order polynomial for $q$ naively is numerically unstable. At least for $q>0$ we can take the logarithm of both sides to stabilize the computation:"
-  st.latex(r"\log \big( V_\text{end} + \text{rate\_avg} \cdot (1+q) \big) = |\text{Months}| \cdot \log (1+q) + \log \big( qV_0 + \text{rate\_avg} \cdot (1+q) \big)")
-  "TODO: $q=0$ is trivial solution; solving strategy for $q>0$, $q<0$"
+  block = st.beta_expander("Effective Interest Rate")
+  with block:
+    # TODO: remove double definition of general explanations
+    "This is the interest rate of a savings plan with fixed interest rate that would have resulted in the same depot value at the given time (same $V_0$, average rate per month)"
+    "The effective interest rate uses the average rate obtained as follows:"
+    block.latex(r"\text{rate\_avg} = \frac{1}{|\text{Months}|} \sum_{m = 1}^{|\text{Months}|} \text{rate}(\text{month}_m)")
+    "Then it finds the monthly interest rate *q* such that"
+    block.latex(r"V_\text{end} = V_0 \cdot (1+q)^{|\text{Months}|} + \text{rate\_avg} \cdot \sum_{m = 1}^{|\text{Months}|} (1+q)^m.")
+    "The final value $p$ is then obtained by $p = (1+q)^{12}$."
+    "The right-hand side of the above formula can be transformed to"
+    block.latex(r"V_0 \cdot (1+q)^{|\text{Months}|} + \text{rate\_avg} \cdot \sum_{m = 0}^{|\text{Months}|} (1+q)^m - \text{rate\_avg}")
+    block.latex(r"V_0 \cdot (1+q)^{|\text{Months}|} + \text{rate\_avg} \cdot \frac{(1+q)^{|\text{Months}|+1}-(1+q)}{q}")
+    block.latex(r"(1+q)^{|\text{Months}|} \cdot \left( V_0 + \frac{\text{rate\_avg} \cdot (1+q)}{q} \right) - \text{rate\_avg} \cdot \frac{(1+q)}{q}")
+    r"As a result, multiplying the equation for $V_\text{end}$ by $q$ yields"
+    block.latex(r"q V_\text{end} + \text{rate\_avg} \cdot (1+q) = (1+q)^{|\text{Months}|} \cdot \left( qV_0 + \text{rate\_avg} \cdot (1+q) \right)")
+    "Solving this high-order polynomial for $q$ naively is numerically unstable. At least for $q>0$ we can take the logarithm of both sides to stabilize the computation:"
+    block.latex(r"\log \big( V_\text{end} + \text{rate\_avg} \cdot (1+q) \big) = |\text{Months}| \cdot \log (1+q) + \log \big( qV_0 + \text{rate\_avg} \cdot (1+q) \big)")
+    "TODO: $q=0$ is trivial solution; solving strategy for $q>0$, $q<0$"
+
 
 elif section == "Code":
   with open("app.py") as src_app:
