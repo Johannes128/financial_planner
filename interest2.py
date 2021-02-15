@@ -344,12 +344,20 @@ class SavingsPlan(MonthHistory):
   def effective_grow_percentage(self, V_0, rate_cum, V_E, num_months):
     avg_rate = rate_cum / num_months
 
-    # TODO: this implcitly assumes that the rate is paid at the end of each month
-    def h_positive(q):
-      return log(V_0*q + avg_rate) + num_months * log(1+q) - log( avg_rate + q*V_E)
+    if False:
+      # TODO: this implcitly assumes that the rate is paid at the end of each month
+      def h_positive(q):
+        return log(V_0*q + avg_rate) + num_months * log(1+q) - log( avg_rate + q*V_E)
 
-    def h_negative(q):
-      return ( q*V_0 + avg_rate ) * (1 + q) ** num_months - q*V_E - avg_rate
+      def h_negative(q):
+        return ( q*V_0 + avg_rate ) * (1 + q) ** num_months - q*V_E - avg_rate
+    else:
+      # TODO: this implcitly assumes that the rate is paid at the beginning of each month
+      def h_positive(q):
+        return log(V_0 * q + avg_rate* (1+q)) + num_months * log(1 + q) - log( q * V_E + avg_rate * (1+q) )
+
+      def h_negative(q):
+        return (q * V_0 + avg_rate * (1+q)) * (1 + q) ** num_months  -  ( q * V_E + avg_rate * (1+q) )
 
     if V_0 + rate_cum < V_E:
       sol = sp.optimize.root_scalar(h_positive, method="brentq", bracket=[1e-10, 2.0])
