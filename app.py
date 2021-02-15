@@ -42,7 +42,7 @@ if section == "ETF Savings Plan":
   tax_variant = col1.selectbox("Tax Variant", tax_variants, index=tax_variants.index("married"))
   #basis_tax_rate = col2.number_input("Basis Tax Rate [%]", 0.0, 50.0, 0.5, step=0.1)
 
-  etf_mode = st.radio("Mode", ["Fixed Interest Rate", "Historical Performance"])
+  etf_mode = st.radio("Interest Mode", ["Fixed Interest Rate", "Historical Performance"])
   if etf_mode == "Fixed Interest Rate":
     r"""
 This mode simulates a stocks savings plan respecting German tax laws for different average interest rates.
@@ -99,6 +99,7 @@ It is intended to provide an overview of the interest spread when starting the i
     "Then it finds the monthly interest rate $q$ such that"
     explanation.latex(r"V_\text{end} = V_0 \cdot (1+q)^{|\text{Months}|} + \text{rate\_avg} \cdot \sum_{m = 1}^{|\text{Months}|} (1+q)^m.")
     "The final value $p$ is then obtained by $p = (1+q)^{12}$."
+    "**Remark**: This approach is correct for plans where the monthly rate is fixed. If the monthly rate varies it becomes a (more or less accurate) approximation..."
 
   show_data = st.checkbox("Show raw data table")
 
@@ -107,7 +108,7 @@ It is intended to provide an overview of the interest spread when starting the i
   end_distribution_df = get_end_distribution(plans, V_keys_selected)
 
   for V_key in spread_df.keys():
-    st.header(f"*{V_key}*")
+    st.header(f"History of *{V_key}*")
     st.line_chart(spread_df[V_key])
     st.header(f"End Distribution of *{V_key}*")
     st.bar_chart(end_distribution_df[V_key])
