@@ -77,7 +77,7 @@ It is intended to provide an overview of the interest spread when starting the i
     plans = simulate_plans()
 
   V_keys = ["V_end", "V_net", "interest_cum", "tax_cum", "tax_sell", "interest_eff"]
-  V_keys_selected = st.multiselect("Values to plot", V_keys, default=["V_end"]) #, "interest_eff"])
+  V_keys_selected = st.multiselect("Values to plot", V_keys, default=["V_end", "interest_eff"])
   """
 * **V_end** is the expected value of the total depot at each time
 * **V_net** is the expected value of the total depot **after sell tax** at each time
