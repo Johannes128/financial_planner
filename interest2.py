@@ -303,16 +303,12 @@ class TaxInfo:
 
 
 TAX_INFO_REGULAR = {
-  "single_with_soli": TaxInfo(0.26375, 801.00),
-  "married_with_soli": TaxInfo(0.26375, 1_602.00),
-  "single": TaxInfo(0.25, 801.00),
-  "married": TaxInfo(0.25, 1_602.00)
+  "single": TaxInfo(0.26375, 801.00),
+  "married": TaxInfo(0.26375, 1_602.00)
 }
 TAX_INFO_STOCKS = {
-  "single_with_soli": TaxInfo(0.26375, 801.00, 0.7),
-  "married_with_soli": TaxInfo(0.26375, 1_602.00, 0.7),
-  "single": TaxInfo(0.25, 801.00, 0.7),
-  "married": TaxInfo(0.25, 1_602.00, 0.7)
+  "single": TaxInfo(0.26375, 801.00, 0.7),
+  "married": TaxInfo(0.26375, 1_602.00, 0.7)
 }
 
 
