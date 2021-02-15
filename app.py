@@ -183,9 +183,13 @@ elif section == "Documentation":
     block.latex(r"V_\text{end} = V_0 \cdot (1+q)^{|\text{Months}|} + \text{rate\_avg} \cdot \sum_{m = 1}^{|\text{Months}|} (1+q)^m.")
     "The final value $p$ is then obtained by $p = (1+q)^{12}$."
     "The right-hand side of the above formula can be transformed to"
-    block.latex(r"V_0 \cdot (1+q)^{|\text{Months}|} + \text{rate\_avg} \cdot \sum_{m = 0}^{|\text{Months}|} (1+q)^m - \text{rate\_avg}")
-    block.latex(r"V_0 \cdot (1+q)^{|\text{Months}|} + \text{rate\_avg} \cdot \frac{(1+q)^{|\text{Months}|+1}-(1+q)}{q}")
-    block.latex(r"(1+q)^{|\text{Months}|} \cdot \left( V_0 + \frac{\text{rate\_avg} \cdot (1+q)}{q} \right) - \text{rate\_avg} \cdot \frac{(1+q)}{q}")
+    block.latex(r"""
+        \begin{aligned}
+               &V_0 \cdot (1+q)^{|\text{Months}|} + \text{rate\_avg} \cdot \sum_{m = 0}^{|\text{Months}|} (1+q)^m - \text{rate\_avg} \\
+          = \, &V_0 \cdot (1+q)^{|\text{Months}|} + \text{rate\_avg} \cdot \frac{(1+q)^{|\text{Months}|+1}-(1+q)}{q} \\
+          = \, &(1+q)^{|\text{Months}|} \cdot \left( V_0 + \frac{\text{rate\_avg} \cdot (1+q)}{q} \right) - \text{rate\_avg} \cdot \frac{(1+q)}{q}
+        \end{aligned}
+    """)
     r"As a result, multiplying the equation for $V_\text{end}$ by $q$ yields"
     block.latex(r"q V_\text{end} + \text{rate\_avg} \cdot (1+q) = (1+q)^{|\text{Months}|} \cdot \left( qV_0 + \text{rate\_avg} \cdot (1+q) \right)")
     "Solving this high-order polynomial for $q$ naively is numerically unstable. At least for $q>0$ we can take the logarithm of both sides to stabilize the computation:"
