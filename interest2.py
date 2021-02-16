@@ -8,11 +8,14 @@ from math import log
 import numbers
 import pprint
 import time
-import scipy as sp
-import scipy.optimize
 
 from contexttimer import timer
+import pandas as pd
 import tabulate
+
+import numpy as np
+import scipy as sp
+import scipy.optimize
 
 
 TABLULATE_FLOAT_FMT = "6_.2f"
@@ -216,7 +219,6 @@ class MonthHistory(list):
     return table
 
   def to_dataframe(self, entries=None, level="ALL"):
-    import pandas as pd
     table = self.to_table(entries)
     df = pd.DataFrame(table, columns=self.table_header(level)).set_index("start")
     df.index = pd.to_datetime(df.index)

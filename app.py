@@ -1,3 +1,5 @@
+import collections
+
 from contexttimer import timer
 import streamlit as st
 import pandas as pd
@@ -25,7 +27,7 @@ def get_end_distribution(plans, V_keys=("V_end",), V_keys_percentage=("interest_
           for V_key in V_keys}
 
 
-section = st.sidebar.radio("Section", ["ETF Savings Plan", "Real Estate Financing", "Documentation", "Code"])
+section = st.sidebar.radio("Section", ["ETF Savings Plan", "Real Estate Financing", "Documentation", "Code", "Alpha: Interest Triangle"])
 st.title(section)
 
 disclaimer = "**Disclaimer**: This is work in progress. I do not take any responsibility for the correctness of any provided data. 😅"
@@ -195,6 +197,65 @@ elif section == "Documentation":
     "Solving this high-order polynomial for $q$ naively is numerically unstable. At least for $q>0$ we can take the logarithm of both sides to stabilize the computation:"
     block.latex(r"\log \big( V_\text{end} + \text{rate\_avg} \cdot (1+q) \big) = |\text{Months}| \cdot \log (1+q) + \log \big( qV_0 + \text{rate\_avg} \cdot (1+q) \big)")
     "TODO: $q=0$ is trivial solution; solving strategy for $q>0$, $q<0$"
+
+
+elif section == "Alpha: Interest Triangle":
+  st.write("**WARNING: This is untested and highly experimental! Only enjoy for visual purposes...**")
+
+  st.write("The triangle below gives an overview how different start/sell times influence the interest rate. Move the mouse over a cell for easy reading.")
+
+  V_0 = 0
+  rate = 1000.00
+  tax_variant = "married"
+  start_year, end_year = 1970, 2020
+  key_month = 1
+
+  start_times = [Month(y, 1) for y in range(start_year, end_year + 1)]
+  plans = [StocksSavingsPlanDataBased(f"ETF_{s.year:04d}-{s.month:02d}", V_0, rate, start=s, tax_info=tax_variant).year_steps(end_year - s.year)
+           for s in start_times]
+
+  triangle_cols = {"start_year": [],
+                   "sell_year": [],
+                   "runtime": [],
+                   "interest": []}
+
+  for plan in plans:
+    year_summaries = plan.get_year_summaries()
+    for entry in year_summaries:
+      if entry["start"].month != key_month:
+        continue
+      cur_start_year, cur_sell_year = year_summaries[0]["start"].year, entry["start"].year
+      triangle_cols["start_year"].append(cur_start_year)
+      triangle_cols["sell_year"].append(cur_sell_year)
+      triangle_cols["runtime"].append(cur_sell_year - cur_start_year)
+      triangle_cols["interest"].append(entry["interest_eff"])
+  triangle_cols_df = pd.DataFrame(triangle_cols)
+
+  chart = alt.Chart(triangle_cols_df).mark_rect().encode(
+    x='sell_year:O',
+    y=alt.Y('start_year:O',
+        sort=alt.EncodingSortField('start_year', order='descending')),
+    #y='start_year:O',
+    color=alt.Color('interest:Q', scale=alt.Scale(scheme='redyellowgreen')),
+    tooltip=[
+      alt.Tooltip(field="start_year", type="quantitative", title="Start Year"),
+      alt.Tooltip(field="sell_year", type="quantitative", title="Sell Year"),
+      alt.Tooltip(field="runtime", type="quantitative", title="Runtime [years]"),
+      alt.Tooltip(field="interest", type="quantitative", title="Interest", format=".2f"),
+    ]
+  )
+
+  text = chart.mark_text(baseline='middle', fontSize=6).encode(
+    text=alt.Text('interest:Q', format=".1f"),
+    color=alt.value('black'),
+  )
+
+  final_chart = (chart + text).properties(
+    width=850,
+    height=700
+  )
+
+  st.write(final_chart)
 
 
 elif section == "Code":
