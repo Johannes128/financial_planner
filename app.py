@@ -269,7 +269,7 @@ elif section == "Interest Triangle":
   timeseries_chart = alt.Chart(triangle_cols_df).mark_line().encode(
     x="sell_year",
     y="interest",
-    color=alt.Color('runtime:O')
+    color=alt.Color('runtime:O', scale=alt.Scale(scheme='dark2'), legend=alt.Legend(columns=3, symbolLimit=100))
   ).properties(
     width=GRAPH_WIDTH,
     height=max(100, 200 * size_factor)
