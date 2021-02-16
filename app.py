@@ -239,7 +239,7 @@ elif section == "Alpha: Interest Triangle":
   chart = alt.Chart(triangle_cols_df).mark_rect().encode(
     x='sell_year:O',
     y=alt.Y('start_year:O', sort=alt.EncodingSortField('start_year', order='descending')),
-    color=alt.condition(selection, interest_color, alt.value("grey")),
+    color=alt.condition(selection, alt.value("black"), interest_color),
     #color=interest_color,
     tooltip=[
       alt.Tooltip(field="start_year", type="quantitative", title="Start Year"),
@@ -250,14 +250,15 @@ elif section == "Alpha: Interest Triangle":
   )
 
   if True:
-    text = chart.mark_text(baseline='middle', fontSize=6).encode(
+    text = chart.mark_text(baseline='middle', fontSize=8, fontWeight=900).encode(
       text=alt.Text('interest:Q', format=".1f"),
-      color=alt.value('black'),
+      #color=alt.condition(selection, alt.value('#EEEE00'), alt.value('black')),
+      color=alt.condition(selection, interest_color, alt.value("black"))
     )
 
     final_chart = (chart + text).properties(
-      width=850,
-      height=700
+      width=900,
+      height=600
     ).add_selection(selection)
   else:
     final_chart = chart
