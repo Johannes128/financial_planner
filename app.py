@@ -207,7 +207,7 @@ elif section == "Alpha: Interest Triangle":
   V_0 = 0
   rate = 1000.00
   tax_variant = "married"
-  start_year, end_year = 1970, 2020
+  start_year, end_year = 1980, 2020
   key_month = 1
 
   start_times = [Month(y, 1) for y in range(start_year, end_year + 1)]
@@ -231,12 +231,16 @@ elif section == "Alpha: Interest Triangle":
       triangle_cols["interest"].append(entry["interest_eff"])
   triangle_cols_df = pd.DataFrame(triangle_cols)
 
+  selection = alt.selection_single(on='mouseover', empty='none', fields=['runtime'])
+  #selection = alt.selection_multi(fields=['runtime'])
+  interest_color = alt.Color('interest:Q', scale=alt.Scale(domain=[-50, -30, -5, 0.0, 5, 15, 50],
+                                                           range=["red", "red", "#FFAAAA", "#FFFFFF", "#BBFFBB", "#00AA00", "#006600"],
+                                                           type="linear"))
   chart = alt.Chart(triangle_cols_df).mark_rect().encode(
     x='sell_year:O',
-    y=alt.Y('start_year:O',
-        sort=alt.EncodingSortField('start_year', order='descending')),
-    #y='start_year:O',
-    color=alt.Color('interest:Q', scale=alt.Scale(scheme='redyellowgreen')),
+    y=alt.Y('start_year:O', sort=alt.EncodingSortField('start_year', order='descending')),
+    color=alt.condition(selection, interest_color, alt.value("grey")),
+    #color=interest_color,
     tooltip=[
       alt.Tooltip(field="start_year", type="quantitative", title="Start Year"),
       alt.Tooltip(field="sell_year", type="quantitative", title="Sell Year"),
@@ -245,15 +249,18 @@ elif section == "Alpha: Interest Triangle":
     ]
   )
 
-  text = chart.mark_text(baseline='middle', fontSize=6).encode(
-    text=alt.Text('interest:Q', format=".1f"),
-    color=alt.value('black'),
-  )
+  if True:
+    text = chart.mark_text(baseline='middle', fontSize=6).encode(
+      text=alt.Text('interest:Q', format=".1f"),
+      color=alt.value('black'),
+    )
 
-  final_chart = (chart + text).properties(
-    width=850,
-    height=700
-  )
+    final_chart = (chart + text).properties(
+      width=850,
+      height=700
+    ).add_selection(selection)
+  else:
+    final_chart = chart
 
   st.write(final_chart)
 
