@@ -27,7 +27,7 @@ def get_end_distribution(plans, V_keys=("V_end",), V_keys_percentage=("interest_
           for V_key in V_keys}
 
 
-section = st.sidebar.radio("Section", ["ETF Savings Plan", "Real Estate Financing", "Documentation", "Code", "Alpha: Interest Triangle"])
+section = st.sidebar.radio("Section", ["ETF Savings Plan", "Real Estate Financing", "Interest Triangle", "Documentation", "Code"])
 st.title(section)
 
 disclaimer = "**Disclaimer**: This is work in progress. I do not take any responsibility for the correctness of any provided data. 😅"
@@ -199,16 +199,20 @@ elif section == "Documentation":
     "TODO: $q=0$ is trivial solution; solving strategy for $q>0$, $q<0$"
 
 
-elif section == "Alpha: Interest Triangle":
+elif section == "Interest Triangle":
   st.write("**WARNING: This is untested and highly experimental! Only enjoy for visual purposes...**")
 
   st.write("The triangle below gives an overview how different start/sell times influence the interest rate. Move the mouse over a cell for easy reading.")
 
-  V_0 = 0
-  rate = 1000.00
+  col1, col2 = st.beta_columns(2)
+
+  V_0 = col1.number_input("Start Capital V_0", 0.0, 1000_000_000.00, 100_000.00, step=5_000.00)
+  rate = col2.number_input("Monthly Rate", 0.0, 1000_000_000.00, 1_350.00, step=50.00)
+  start_year = col1.number_input("Start Year", 1970, 2020, 1970, step=5)
+  end_year = col2.number_input("End Year", start_year, 2020, 2020, step=5)
+
   tax_variant = "married"
-  start_year, end_year = 1980, 2020
-  key_month = 1
+  key_month = 1 # TODO: make this clean!
 
   start_times = [Month(y, 1) for y in range(start_year, end_year + 1)]
   plans = [StocksSavingsPlanDataBased(f"ETF_{s.year:04d}-{s.month:02d}", V_0, rate, start=s, tax_info=tax_variant).year_steps(end_year - s.year)
@@ -231,18 +235,16 @@ elif section == "Alpha: Interest Triangle":
       triangle_cols["interest"].append(entry["interest_eff"])
   triangle_cols_df = pd.DataFrame(triangle_cols)
 
-  # TODO: see https://altair-viz.github.io/gallery/select_detail.html for selecting durations
-
   selection = alt.selection_single(on='mouseover', empty='none', fields=['runtime'])
-  #selection = alt.selection_multi(fields=['runtime'])
+  selector = alt.selection_single(on="mousemove", empty='all', fields=['runtime'])
+
   interest_color = alt.Color('interest:Q', scale=alt.Scale(domain=[-50, -30, -5, 0.0, 5, 15, 50],
                                                            range=["red", "red", "#FFAAAA", "#FFFFFF", "#BBFFBB", "#00AA00", "#006600"],
                                                            type="linear"))
-  chart = alt.Chart(triangle_cols_df).mark_rect().encode(
+  triangle_chart = alt.Chart(triangle_cols_df).mark_rect().encode(
     x='sell_year:O',
     y=alt.Y('start_year:O', sort=alt.EncodingSortField('start_year', order='descending'), axis=alt.Axis(orient='right')),
     color=alt.condition(selection, alt.value("black"), interest_color),
-    #color=interest_color,
     tooltip=[
       alt.Tooltip(field="start_year", type="quantitative", title="Start Year"),
       alt.Tooltip(field="sell_year", type="quantitative", title="Sell Year"),
@@ -251,21 +253,29 @@ elif section == "Alpha: Interest Triangle":
     ]
   )
 
-  if True:
-    text = chart.mark_text(baseline='middle', fontSize=8, fontWeight=900).encode(
-      text=alt.Text('interest:Q', format=".1f"),
-      #color=alt.condition(selection, alt.value('#EEEE00'), alt.value('black')),
-      color=alt.condition(selection, interest_color, alt.value("black"))
-    )
+  text = triangle_chart.mark_text(baseline='middle', fontSize=8, fontWeight=900).encode(
+    text=alt.Text('interest:Q', format=".1f"),
+    color=alt.condition(selection, alt.value('#EEEE00'), alt.value('black')),
+  )
 
-    final_chart = (chart + text).properties(
-      width=900,
-      height=600
-    ).add_selection(selection)
-  else:
-    final_chart = chart
+  size_factor = (end_year-start_year)/50
+  GRAPH_WIDTH = max(450, 900 * size_factor)
 
-  st.write(final_chart)
+  final_triangle_chart_chart = (triangle_chart + text).properties(
+    width=GRAPH_WIDTH,
+    height=max(250, 500 * size_factor)
+  ).add_selection(selection).add_selection(selector)
+
+  timeseries_chart = alt.Chart(triangle_cols_df).mark_line().encode(
+    x="sell_year",
+    y="interest",
+    color=alt.Color('runtime:O')
+  ).properties(
+    width=GRAPH_WIDTH,
+    height=max(100, 200 * size_factor)
+  ).transform_filter(selector)
+
+  st.write(final_triangle_chart_chart & timeseries_chart)
 
 
 elif section == "Code":
