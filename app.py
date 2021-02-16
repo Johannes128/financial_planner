@@ -231,6 +231,8 @@ elif section == "Alpha: Interest Triangle":
       triangle_cols["interest"].append(entry["interest_eff"])
   triangle_cols_df = pd.DataFrame(triangle_cols)
 
+  # TODO: see https://altair-viz.github.io/gallery/select_detail.html for selecting durations
+
   selection = alt.selection_single(on='mouseover', empty='none', fields=['runtime'])
   #selection = alt.selection_multi(fields=['runtime'])
   interest_color = alt.Color('interest:Q', scale=alt.Scale(domain=[-50, -30, -5, 0.0, 5, 15, 50],
@@ -238,7 +240,7 @@ elif section == "Alpha: Interest Triangle":
                                                            type="linear"))
   chart = alt.Chart(triangle_cols_df).mark_rect().encode(
     x='sell_year:O',
-    y=alt.Y('start_year:O', sort=alt.EncodingSortField('start_year', order='descending')),
+    y=alt.Y('start_year:O', sort=alt.EncodingSortField('start_year', order='descending'), axis=alt.Axis(orient='right')),
     color=alt.condition(selection, alt.value("black"), interest_color),
     #color=interest_color,
     tooltip=[
