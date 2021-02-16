@@ -183,7 +183,7 @@ elif section == "Documentation":
     block.latex(r"\text{rate\_avg} = \frac{1}{|\text{Months}|} \sum_{m = 1}^{|\text{Months}|} \text{rate}(\text{month}_m)")
     "Then it finds the monthly interest rate $q$ such that"
     block.latex(r"V_\text{end} = V_0 \cdot (1+q)^{|\text{Months}|} + \text{rate\_avg} \cdot \sum_{m = 1}^{|\text{Months}|} (1+q)^m.")
-    "The final value $p$ is then obtained by $p = (1+q)^{12}$."
+    "The final value $p$ is then obtained by $p = (1+q)^{12} - 1$."
     "The right-hand side of the above formula can be transformed to"
     block.latex(r"""
         \begin{aligned}
