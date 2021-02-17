@@ -24,35 +24,49 @@ def cum_key(key):
   return key + "_cum"
 
 
+one_day = timedelta(days=1)
 year_timedelta = timedelta(days=365)
 month_timedelta = timedelta(days=365/12)
 
 
-class Month(date):
-  def __new__(cls, year, month):
-    return date.__new__(cls, year, month, 1)
+class Date(date):
+  def __new__(cls, year, month, day=1):
+    return date.__new__(cls, year, month, day)
 
   @staticmethod
   def from_date(d : date):
-    return Month(d.year, d.month)
+    return Date(d.year, d.month, d.day)
+
+  def to_date(self):
+    return date(self.year, self.month, self.day)
 
   def prev_month(self):
     if self.month > 1:
-      return Month(self.year, self.month-1)
+      return Date(self.year, self.month-1)
     else:
-      return Month(self.year-1, 12)
+      return Date(self.year-1, 12)
 
   def next_month(self):
     if self.month < 12:
-      return Month(self.year, self.month+1)
+      return Date(self.year, self.month+1)
     else:
-      return Month(self.year+1, 1)
+      return Date(self.year+1, 1)
+
+  def prev_day(self):
+    return Date.from_date(self - one_day)
+
+  def next_day(self):
+    return Date.from_date(self + one_day)
+
+  def last_day_of_month(self):
+    d = self.next_month()
+    return Date.from_date(Date(d.year, d.month, 1) - one_day)
 
   def __str__(self):
-    return f"{self.year:04d}-{self.month:02d}"
+    return f"{self.year:04d}-{self.month:02d}-{self.day:02d}"
 
   def __repr__(self):
-    return f"{self.__class__.__name__}({self.year}, {self.month})"
+    return f"{self.__class__.__name__}({self.year}, {self.month}, {self.day})"
 
 
 class Rate:
@@ -78,12 +92,12 @@ class ConstantRate(Rate):
 class MonthEntryBase(dict):
   FLOAT_ATTRIBUTES_GENERAL = ["V_start", "V_end", "V_net"]
   FLOAT_ATTRIBUTES_CUM = ["rate", "interest", "tax"]
-  NON_NUM_ATTRIBUTES = ["start"]
+  NON_NUM_ATTRIBUTES = ["start", "end"]
 
   @classmethod
   def get_show_attributes(cls, level="ALL"):
     if level == "ALL":
-      return (["start"] + cls.FLOAT_ATTRIBUTES_GENERAL
+      return (["start", "end"] + cls.FLOAT_ATTRIBUTES_GENERAL
               + sorted(cls.FLOAT_ATTRIBUTES_CUM + [cum_key(attr) for attr in cls.FLOAT_ATTRIBUTES_CUM]))
     elif level == "MINIMAL":
       return cls.FLOAT_ATTRIBUTES_GENERAL
@@ -97,7 +111,9 @@ class MonthEntryBase(dict):
     super().__init__(**kwargs)
 
     if "start" not in self:
-      self["start"] = Month(1, 1)
+      self["start"] = Date(1, 1)
+    if "end" not in self:
+      self["end"] = self["start"].last_day_of_month()
 
     for key in self.FLOAT_ATTRIBUTES_GENERAL:
       if key not in self:
@@ -122,8 +138,10 @@ class MonthEntryBase(dict):
   def __add__(self, other):
     keys = (set(self.keys()) | set(other.keys())) - set(self.NON_NUM_ATTRIBUTES)
     assert self["start"] == other["start"], f"start mismatch: {self['start']} != {other['start']}"
+    assert self["end"] == other["end"], f"end mismatch: {self['end']} != {other['end']}"
     pairs = {key: self.get(key, 0.00) + other.get(key, 0.00) for key in keys}
     pairs["start"] = self["start"]
+    pairs["end"] = self["end"]
     return MonthEntryBase(**pairs)
 
 
@@ -165,7 +183,7 @@ class MonthHistory(list):
     return list(reversed(year_entries))
 
   def elapsed_years(self, start):
-    return (start-self[0]["start"]) / year_timedelta
+    return (start-self[0]["end"]) / year_timedelta
 
   def elapsed_months(self, start):
     #return (start-self[0]["start"]) / month_timedelta
@@ -189,6 +207,7 @@ class MonthHistory(list):
     def merge_year_entries(entries):
       entry = copy.copy(entries[-1])
       entry["start"] = entries[0]["start"]
+      entry["end"] = entries[-1]["end"]
       entry["V_start"] = entries[0]["V_start"]
       for attr in entry.FLOAT_ATTRIBUTES_CUM:
         entry[attr] = sum(e[attr] for e in entries)
@@ -199,7 +218,10 @@ class MonthHistory(list):
     for entry in self[1:]:
       years_entries[entry["start"].year].append(entry)
 
-    result = [self[0]]
+    first_entry = self[0].copy()
+    first_entry["end"] = self[0]["start"].last_day_of_month()
+
+    result = [first_entry]
     for year, year_entries in years_entries.items():
       result.append(merge_year_entries(year_entries))
 
@@ -218,9 +240,9 @@ class MonthHistory(list):
       table = [self.table_header(level)] + table
     return table
 
-  def to_dataframe(self, entries=None, level="ALL"):
+  def to_dataframe(self, entries=None, index="start", level="ALL"):
     table = self.to_table(entries)
-    df = pd.DataFrame(table, columns=self.table_header(level)).set_index("start")
+    df = pd.DataFrame(table, columns=self.table_header(level)).set_index(index)
     df.index = pd.to_datetime(df.index)
     return df
 
@@ -233,8 +255,8 @@ class MonthHistory(list):
                         headers=self.table_header(level))
     ])
 
-  def to_year_dataframe(self, level="ALL"):
-    return self.to_dataframe(self.get_year_summaries(), level)
+  def to_year_dataframe(self, index="end", level="ALL"):
+    return self.to_dataframe(self.get_year_summaries(), index=index, level=level)
 
   def print(self, level="ALL"):
     print(self.to_string(self, level))
@@ -499,7 +521,8 @@ class StocksSavingsPlanDataBased(StocksSavingsPlan):
     def _load_data():
       with open(filename) as f:
         def parse_line(l):
-          return [Month.from_date(datetime.strptime(l[0], "%Y-%m-%d").date()), float(l[1])]
+          parsed_date, value = datetime.strptime(l[0], "%Y-%m-%d").date(), float(l[1])
+          return [Date.from_date(parsed_date).last_day_of_month().next_day(), value] # TODO: here we assume that the data times are end of months day, e.g. 2002-01-31
         chart_data = [parse_line(l) for i, l in enumerate(csv.reader(f, delimiter=";")) if i > 0]
       return {line[0]: line[1] for line in chart_data}
     return _load_data()

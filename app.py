@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 import altair as alt
 
-from interest2 import Month, StocksSavingsPlan, StocksSavingsPlanDataBased, AnnuityLoan, Parallel, TAX_INFO_STOCKS
+from interest2 import Date, StocksSavingsPlan, StocksSavingsPlanDataBased, AnnuityLoan, Parallel, TAX_INFO_STOCKS
 
 
 def get_spread(plans, V_keys=("V_end",)):
@@ -38,7 +38,7 @@ if section == "ETF Savings Plan":
 
   V_0 = col1.number_input("Start Capital V_0", 0.0, 1000_000_000.00, 100_000.00, step=5_000.00)
   rate = col2.number_input("Monthly Rate", 0.0, 1000_000_000.00, 1_350.00, step=50.00)
-  start = Month(1990, 1)
+  start = Date(1990, 1)
   runtime_years = col3.number_input("Runtime [years]", 1, 100, 30)
   tax_variants = list(TAX_INFO_STOCKS.keys())
   tax_variant = col1.selectbox("Tax Variant", tax_variants, index=tax_variants.index("married"))
@@ -70,7 +70,7 @@ It is intended to provide an overview of the interest spread when starting the i
     start_years = st.multiselect("Start years", possible_start_years, default=possible_start_years)
     start_months = st.multiselect("Start months", list(range(1, 13)), [1, 7])
 
-    start_times = [Month(y, m) for y in start_years for m in start_months]
+    start_times = [Date(y, m) for y in start_years for m in start_months]
 
     @timer()
     def simulate_plans():
@@ -151,7 +151,7 @@ elif section == "Real Estate Financing":
 **Capital remaining: {capital_remaining:_.2f}**
   """
 
-  start = Month(2021, 1)
+  start = Date(2021, 1)
 
   plans = [Parallel("Plan_{:02d}%".format(p),
                     start=start,
@@ -210,14 +210,14 @@ elif section == "Interest Triangle":
   V_0 = col1.number_input("Start Capital V_0", 0.0, 1000_000_000.00, 100_000.00, step=5_000.00)
   rate = col2.number_input("Monthly Rate", 0.0, 1000_000_000.00, 1_350.00, step=50.00)
   start_year = col1.number_input("Start Year", 1970, 2020, 1970, step=5)
-  end_year = col2.number_input("End Year", start_year, 2020, 2020, step=5)
+  end_year = col2.number_input("End Year", start_year, 2020, 2020, step=5) + 1
 
   stocks_index = st.selectbox("Index", ["MSCI World"], index=0)  # TODO: use this value
 
   tax_variant = "married"
   key_month = 1 # TODO: make this clean!
 
-  start_times = [Month(y, 1) for y in range(start_year, end_year + 1)]
+  start_times = [Date(y, 1) for y in range(start_year, end_year + 1)]
   plans = [StocksSavingsPlanDataBased(f"ETF_{s.year:04d}-{s.month:02d}", V_0, rate, start=s, tax_info=tax_variant).year_steps(end_year - s.year)
            for s in start_times]
 
