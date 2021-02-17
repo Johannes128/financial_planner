@@ -352,10 +352,10 @@ class SavingsPlan(MonthHistory):
     else:
       # TODO: this implcitly assumes that the rate is paid at the beginning of each month
       def h_positive(q):
-        return log(V_0 * q + avg_rate* (1+q)) + num_months * log(1 + q) - log( q * V_E + avg_rate * (1+q) )
+        return log(V_0 * q + avg_rate* (1+q)) + num_months * log(1+q) - log( q * V_E + avg_rate * (1+q) )
 
       def h_negative(q):
-        return (q * V_0 + avg_rate * (1+q)) * (1 + q) ** num_months  -  ( q * V_E + avg_rate * (1+q) )
+        return (q * V_0 + avg_rate * (1+q)) * (1+q) ** num_months  -  ( q * V_E + avg_rate * (1+q) )
 
     def find_positive_value(f, t, mult=10):
       while f(t) < 1e-5:
