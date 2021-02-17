@@ -64,7 +64,7 @@ This mode simulates a stocks savings plan respecting German tax laws based on hi
 It is intended to provide an overview of the interest spread when starting the investment at different times.
     """
 
-    stocks_index = st.selectbox("Index", ["MSCI World"], index=0)
+    stocks_index = st.selectbox("Index", ["MSCI World"], index=0) # TODO: use this value
 
     possible_start_years = list(range(1970, 2021-runtime_years, 1))
     start_years = st.multiselect("Start years", possible_start_years, default=possible_start_years)
@@ -210,6 +210,8 @@ elif section == "Interest Triangle":
   rate = col2.number_input("Monthly Rate", 0.0, 1000_000_000.00, 1_350.00, step=50.00)
   start_year = col1.number_input("Start Year", 1970, 2020, 1970, step=5)
   end_year = col2.number_input("End Year", start_year, 2020, 2020, step=5)
+
+  stocks_index = st.selectbox("Index", ["MSCI World"], index=0)  # TODO: use this value
 
   tax_variant = "married"
   key_month = 1 # TODO: make this clean!
