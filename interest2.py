@@ -172,13 +172,13 @@ class MonthHistory(list):
     initial_start = self[0]["start"]
     return (start.year - initial_start.year) * 12 + start.month - initial_start.month
 
-  def month_step(self, from_month):
+  def month_step(self, from_month, force_store_additional_info=False):
     raise NotImplementedError
 
   def month_steps(self, num_months, form_month=None):
     cur_month = (self.start if form_month is None else form_month)
     for m in range(num_months):
-      self.month_step(cur_month)
+      self.month_step(cur_month, force_store_additional_info=(m+1 == num_months or (m+1)%12 == 0))
       cur_month = cur_month.next_month()
     return self
 
@@ -267,7 +267,7 @@ class AnnuityLoan(MonthHistory):
   def grow_factor(self, start):
     return 1.0 + (self.p_year/100/12)
 
-  def month_step(self, from_month):
+  def month_step(self, from_month, force_store_additional_info=False):
     if self.finished:
       self.append(copy.copy(self[-1]))
 
@@ -375,7 +375,7 @@ class SavingsPlan(MonthHistory):
     return 100 * ((1+sol.root)**12 - 1)
 
 
-  def month_step(self, from_month):
+  def month_step(self, from_month, force_store_additional_info=False):
     if self.finished:
       self.append(copy.copy(self[-1]))
 
@@ -399,7 +399,7 @@ class SavingsPlan(MonthHistory):
     value += tax
 
     # TODO: refactor
-    if start.month == 12:
+    if start.month == 12 or force_store_additional_info:
       interest_effective = self.effective_grow_percentage(self[0]["V_start"],
                                                           self[-1]["rate_cum"]+rate,
                                                           value,
@@ -427,7 +427,7 @@ class StocksSavingsPlan(SavingsPlan):
   def grow_factor(self, start):
     return (1 + self.p_year / 100) ** (1 / 12)
 
-  def month_step(self, from_month):
+  def month_step(self, from_month, force_store_additional_info=False):
     if self.finished:
       self.append(copy.copy(self[-1]))
 
@@ -471,7 +471,7 @@ class StocksSavingsPlan(SavingsPlan):
       tax = 0.0
 
     # TODO: refactor
-    if start.month == 12:
+    if start.month == 12 or force_store_additional_info:
       interest_effective = self.effective_grow_percentage(self[0]["V_start"],
                                                           self[-1]["rate_cum"]+rate,
                                                           value,
@@ -556,8 +556,8 @@ class Parallel(MonthHistory):
     for history in self.histories:
       history.clear()
 
-  def month_step(self, from_month):
-    entries = [history.month_step(from_month) for history in self.histories]
+  def month_step(self, from_month, force_store_additional_info=False):
+    entries = [history.month_step(from_month, force_store_additional_info) for history in self.histories]
     entries = [entry for entry in entries if entry is not None]
     self.finished = all(history.finished for history in self.histories)
     if entries:

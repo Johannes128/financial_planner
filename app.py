@@ -231,10 +231,10 @@ elif section == "Interest Triangle":
     for entry in year_summaries:
       if entry["start"].month != key_month:
         continue
-      cur_start_year, cur_sell_year = year_summaries[0]["start"].year, entry["start"].year
+      cur_start_year, cur_sell_year = year_summaries[0]["start"].next_month().year, entry["start"].year
       triangle_cols["start_year"].append(cur_start_year)
       triangle_cols["sell_year"].append(cur_sell_year)
-      triangle_cols["runtime"].append(cur_sell_year - cur_start_year)
+      triangle_cols["runtime"].append(cur_sell_year - cur_start_year + 1)
       triangle_cols["interest"].append(entry["interest_eff"])
   triangle_cols_df = pd.DataFrame(triangle_cols)
 
@@ -269,7 +269,7 @@ elif section == "Interest Triangle":
     height=max(250, 500 * size_factor)
   ).add_selection(selection).add_selection(selector)
 
-  time_range = min(triangle_cols["start_year"])+1, max(triangle_cols["sell_year"]) # TODO: why offsets?
+  time_range = min(triangle_cols["start_year"]), max(triangle_cols["sell_year"])
 
   timeseries_chart = alt.Chart(triangle_cols_df).mark_line().encode(
     y="interest",
