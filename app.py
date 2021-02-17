@@ -282,7 +282,7 @@ elif section == "Interest Triangle":
     height=max(100, 200 * size_factor)
   )
 
-  marker_value = triangle_cols_df[triangle_cols_df["runtime"] == max(triangle_cols_df["runtime"])]["interest"].mean() * 0.75
+  marker_value = max(5.0, triangle_cols_df[triangle_cols_df["runtime"] == max(triangle_cols_df["runtime"])]["interest"].mean() * 0.75)
   test_data = pd.DataFrame({
     "sell_year": time_range * 3,
     "value": [-marker_value, -marker_value] + [0.0, 0.0] + [marker_value, marker_value],
