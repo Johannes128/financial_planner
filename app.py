@@ -283,13 +283,13 @@ elif section == "Interest Triangle":
 
   marker_value = triangle_cols_df[triangle_cols_df["runtime"] == max(triangle_cols_df["runtime"])]["interest"].mean() * 0.75
   test_data = pd.DataFrame({
-    "year": time_range * 3,
+    "sell_year": time_range * 3,
     "value": [-marker_value, -marker_value] + [0.0, 0.0] + [marker_value, marker_value],
     "type": ["bad", "bad"] + ["zero", "zero"] + ["good", "good"]
   })
 
   lines = alt.Chart(test_data).mark_line().encode(
-    x="year",
+    x="sell_year",
     y="value",
     color=alt.Color('type:O', scale=alt.Scale(scheme='set1'))
   )
