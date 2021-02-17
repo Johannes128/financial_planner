@@ -203,6 +203,7 @@ elif section == "Interest Triangle":
   st.write("**WARNING: This is untested and highly experimental! Only enjoy for visual purposes...**")
 
   st.write("The triangle below gives an overview how different start/sell times influence the interest rate. Move the mouse over a cell for easy reading.")
+  st.write("Each line in the line plot represents the interests on selling *for all plans with the same runtime* started at all possible times in the data range. E.g., if the start year is 2000, the end year is 2012, and a plan with a 10 years runtime is hovered in the triangle, the line plot shows the year interest for the plans sold at the end of 2009, 2010 and 2011 which have been started at the beginning of 2000, 2001, 2002, respectively.")
 
   col1, col2 = st.beta_columns(2)
 
@@ -271,8 +272,8 @@ elif section == "Interest Triangle":
   time_range = min(triangle_cols["start_year"])+1, max(triangle_cols["sell_year"]) # TODO: why offsets?
 
   timeseries_chart = alt.Chart(triangle_cols_df).mark_line().encode(
-    x=alt.X("sell_year", scale=alt.Scale(domain=time_range), axis=alt.Axis(format='4.0f')),
     y="interest",
+    x=alt.X("sell_year", scale=alt.Scale(domain=time_range), axis=alt.Axis(format='4.0f')),
     color=alt.Color('runtime:O', scale=alt.Scale(scheme='dark2'), legend=alt.Legend(columns=3, symbolLimit=100))
   ).transform_filter(
     selector
@@ -289,8 +290,8 @@ elif section == "Interest Triangle":
   })
 
   lines = alt.Chart(test_data).mark_line().encode(
-    x="sell_year",
     y="value",
+    x="sell_year",
     color=alt.Color('type:O', scale=alt.Scale(scheme='set1'))
   )
 
