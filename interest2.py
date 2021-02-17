@@ -357,10 +357,19 @@ class SavingsPlan(MonthHistory):
       def h_negative(q):
         return (q * V_0 + avg_rate * (1+q)) * (1 + q) ** num_months  -  ( q * V_E + avg_rate * (1+q) )
 
+    def find_positive_value(f, t, mult=10):
+      while f(t) < 1e-5:
+        t *= mult
+      return t
+
     if V_0 + rate_cum < V_E:
-      sol = sp.optimize.root_scalar(h_positive, method="brentq", bracket=[1e-10, 2.0])
+      b = find_positive_value(h_positive, 1e-16)
+      sol = sp.optimize.root_scalar(h_positive, method="brentq", bracket=[1e-16, b])
+    elif h_negative(-1e-16) >= 0:
+      return 0.0
     else:
-      sol = sp.optimize.root_scalar(h_negative, method="brentq", bracket=[-1.5, -1e-10])
+      a = find_positive_value(h_negative, -1e-16)
+      sol = sp.optimize.root_scalar(h_negative, method="brentq", bracket=[a, -1e-16])
 
     # the result is the interest rate per month, so convert it to a year interest rate
     return 100 * ((1+sol.root)**12 - 1)
