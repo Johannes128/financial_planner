@@ -266,16 +266,33 @@ elif section == "Interest Triangle":
     height=max(250, 500 * size_factor)
   ).add_selection(selection).add_selection(selector)
 
+  time_range = min(triangle_cols["start_year"])+1, max(triangle_cols["sell_year"]) # TODO: why offsets?
+
   timeseries_chart = alt.Chart(triangle_cols_df).mark_line().encode(
-    x="sell_year",
+    x=alt.X("sell_year", scale=alt.Scale(domain=time_range), axis=alt.Axis(format='4.0f')),
     y="interest",
     color=alt.Color('runtime:O', scale=alt.Scale(scheme='dark2'), legend=alt.Legend(columns=3, symbolLimit=100))
+  ).transform_filter(
+    selector
   ).properties(
     width=GRAPH_WIDTH,
     height=max(100, 200 * size_factor)
-  ).transform_filter(selector)
+  )
 
-  st.write(final_triangle_chart_chart & timeseries_chart)
+  marker_value = triangle_cols_df[triangle_cols_df["runtime"] == max(triangle_cols_df["runtime"])]["interest"].mean() * 0.75
+  test_data = pd.DataFrame({
+    "year": time_range * 3,
+    "value": [-marker_value, -marker_value] + [0.0, 0.0] + [marker_value, marker_value],
+    "type": ["bad", "bad"] + ["zero", "zero"] + ["good", "good"]
+  })
+
+  lines = alt.Chart(test_data).mark_line().encode(
+    x="year",
+    y="value",
+    color=alt.Color('type:O', scale=alt.Scale(scheme='set1'))
+  )
+
+  st.write(final_triangle_chart_chart & (lines + timeseries_chart))
 
 
 elif section == "Code":
