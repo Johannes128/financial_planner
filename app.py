@@ -174,14 +174,36 @@ elif section == "Real Estate Financing":
 
       st.write(f"Will start with the remaining capital {capital_remaining:_.2f} and use the rate {etf_rate:_.2f}")
 
-      etf_interest_rates = st.multiselect("ETF interest rates", list(range(0,21)), default=list(range(0,10,2)))
+      etf_mode = st.radio("Interest Mode", ["Fixed Interest Rate", "Historical Performance"])
+      if etf_mode == "Fixed Interest Rate":
+        etf_interest_rates = st.multiselect("ETF interest rates", list(range(0,21)), default=list(range(0,10,2)))
+        etf_plans = [StocksSavingsPlan("Plan_{:02d}%".format(p), capital_remaining, etf_rate, p_year=p, start=start) for p in etf_interest_rates]
 
-      plans = [Parallel("Plan_{:02d}%".format(p),
-                        start=start,
+        annuity_loans = [annuity_loan] * len(etf_plans)
+        start_times = [start] * len(etf_plans)
+
+      elif etf_mode == "Historical Performance":
+        col1, col2 = st.beta_columns(2)
+        stocks_index = col1.selectbox("Index", ["MSCI World"], index=0)  # TODO: use this value
+        tax_variants = list(TAX_INFO_STOCKS.keys())
+        tax_variant = col2.selectbox("Tax Variant", tax_variants, index=tax_variants.index("married"))
+
+        possible_start_years = list(range(1970, 2021 - loan_runtime, 1))
+        start_years = possible_start_years
+        #start_years = st.multiselect("Start years", possible_start_years, default=possible_start_years)
+        start_months = st.multiselect("Start months", list(range(1, 13)), [1])
+        start_times = [Date(y, m) for y in start_years for m in start_months]
+
+        annuity_loans = [AnnuityLoan("SPK", -loan_value, loan_rate, p_year=loan_interest_rate, start=s) for s in start_times]
+        etf_plans = [StocksSavingsPlanDataBased(f"ETF_{s.year:04d}-{s.month:02d}", capital_remaining, etf_rate, start=s, tax_info=tax_variant)
+                     for s in start_times]
+
+      plans = [Parallel(etf_plan.description,
+                        start=s,
                         plans=[annuity_loan,
-                               StocksSavingsPlan("ETF", capital_remaining, etf_rate, p_year=p, start=start)],
+                               etf_plan],
                         ).year_steps(loan_runtime)
-               for p in etf_interest_rates]
+               for s, annuity_loan, etf_plan in zip(start_times, annuity_loans, etf_plans)]
 
   show_data = st.checkbox("Show raw data table")
 
