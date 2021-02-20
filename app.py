@@ -22,9 +22,10 @@ def get_spread(plans, V_keys=("V_end",)):
 
 def get_end_distribution(plans, V_keys=("V_end",), V_keys_percentage=("interest_eff",)):
   total_payments = plans[0][-1]["rate_cum"]
+  start_value = plans[0][0]["V_start"]
 
-  return {V_key: pd.DataFrame({V_key: [plan[-1][V_key] for plan in plans] + ([total_payments] if V_key not in V_keys_percentage else [])},
-                              index=[plan.description for plan in plans] + (["#total_payments"] if V_key not in V_keys_percentage else []))
+  return {V_key: pd.DataFrame({V_key: [plan[-1][V_key] for plan in plans] + ([start_value, total_payments] if V_key not in V_keys_percentage else [])},
+                              index=[plan.description for plan in plans] + (["#start_value", "#total_payments"] if V_key not in V_keys_percentage else []))
           for V_key in V_keys}
 
 
