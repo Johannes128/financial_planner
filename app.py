@@ -21,10 +21,29 @@ def get_spread(plans, V_keys=("V_end",)):
 
 
 def get_end_distribution(plans, V_keys=("V_end",), V_keys_percentage=("interest_eff",)):
-  value_without_interest = plans[0][-1]["rate_cum"] + plans[0][0]["V_start"]
-  return {V_key: pd.DataFrame({V_key: [plan[-1][V_key] for plan in plans] + ([value_without_interest] if V_key not in V_keys_percentage else [])},
+  total_payments = plans[0][-1]["rate_cum"]
+
+  return {V_key: pd.DataFrame({V_key: [plan[-1][V_key] for plan in plans] + ([total_payments] if V_key not in V_keys_percentage else [])},
                               index=[plan.description for plan in plans] + (["#total_payments"] if V_key not in V_keys_percentage else []))
           for V_key in V_keys}
+
+
+def add_zero_column(df):
+  df = df.copy()
+  df.insert(0, "#zero", 0.0)
+  return df
+
+def show_spread_and_end_distribution(plans, V_keys_selected, show_data=False):
+  spread_df = get_spread(plans, V_keys=V_keys_selected)
+  end_distribution_df = get_end_distribution(plans, V_keys_selected)
+
+  for V_key in spread_df.keys():
+    st.header(f"History of *{V_key}*")
+    st.line_chart(add_zero_column(spread_df[V_key]))
+    st.header(f"End Distribution of *{V_key}*")
+    st.bar_chart(end_distribution_df[V_key])
+    if show_data:
+      st.dataframe(spread_df[V_key].iloc[::-1])
 
 
 section = st.sidebar.radio("Section", ["ETF Savings Plan", "Real Estate Financing", "Interest Triangle", "Documentation", "Code"])
@@ -104,72 +123,72 @@ It is intended to provide an overview of the interest spread when starting the i
     "**Remark**: This approach is correct for plans where the monthly rate is fixed. If the monthly rate varies it becomes a (more or less accurate) approximation..."
 
   show_data = st.checkbox("Show raw data table")
+  show_spread_and_end_distribution(plans, V_keys_selected, show_data)
 
-  spread_df = get_spread(plans, V_keys=V_keys_selected)
-
-  end_distribution_df = get_end_distribution(plans, V_keys_selected)
-
-  for V_key in spread_df.keys():
-    st.header(f"History of *{V_key}*")
-    st.line_chart(spread_df[V_key])
-    st.header(f"End Distribution of *{V_key}*")
-    st.bar_chart(end_distribution_df[V_key])
-    if show_data:
-      st.dataframe(spread_df[V_key].iloc[::-1])
 
 elif section == "Real Estate Financing":
   st.write("**Important**: This section still needs alot of love... Please be careful when interpreting the results!")
 
-  col1, col2, col3 = st.beta_columns(3)
+  with st.beta_container():
+    st.subheader("Buying Parameters")
+    col1, col2, col3 = st.beta_columns(3)
 
-  price = col1.number_input("Price", 0.0, 1000_000_000.00, 450_000.00, step=10_000.00)
-  total_capital = col2.number_input("Total capital", 0.0, 1000_000_000.00, 120_000.00, step=10_000.00)
-  eigenkapital = col3.number_input("Total capital to use for buying", 0.0, 1000_000_000.00, 90_000.00, step=10_000.00)
-  buy_costs_rate = col1.number_input("Buy costs rate", 0.0, 100.00, 6.5, step=0.5)
+    price = col1.number_input("Price", 0.0, 1000_000_000.00, 450_000.00, step=10_000.00)
+    total_capital = col2.number_input("Total capital", 0.0, 1000_000_000.00, 120_000.00, step=10_000.00)
+    eigenkapital = col3.number_input("Total capital to use for buying", 0.0, 1000_000_000.00, 90_000.00, step=10_000.00)
+    buy_costs_rate = col1.number_input("Buy costs rate", 0.0, 100.00, 6.5, step=0.5)
 
-  total_monthly_budget = col2.number_input("Total monthly budget", 0.0, 1000_000_000.00, 2_000.00, step=100.00)
-  loan_interest_rate = col3.number_input("Loan interest rate", 0.0, 100.00, 1.1, step=0.1)
-  loan_runtime = col1.number_input("Loan run time", 5, 50, 20, step=5)
-  loan_rate = col2.number_input("Loan monthly rate", 0.0, 100_000.00, 1350.00, step=100.00)
+    buy_costs = price * buy_costs_rate / 100
+    total_price = price + buy_costs
+    loan_value = total_price - eigenkapital
+    capital_remaining = total_capital - eigenkapital
 
-  etf_interest_rates = st.multiselect("ETF interest rates", list(range(0,21)), default=list(range(0,10,2)))
+    col1, col2, col3, col4 = st.beta_columns(4)
+    col1.write("**Total price:**");       col2.write(f"**{total_price:_.2f}**")
+    col3.write("**Buy costs:**");         col4.write(f"**{buy_costs:_.2f}**")
+    col1.write("**Needed loan value:**"); col2.write(f"**{loan_value:_.2f}**")
+    col3.write("**Capital remaining:**"); col4.write(f"**{capital_remaining:_.2f}**")
+
+  with st.beta_container():
+    st.subheader("Loan Parameters")
+    col1, col2, col3 = st.beta_columns(3)
+    loan_interest_rate = col3.number_input("Loan interest rate", 0.0, 100.00, 1.1, step=0.1)
+    loan_runtime = col1.number_input("Loan run time", 5, 50, 20, step=5)
+    loan_rate = col2.number_input("Loan monthly rate", 0.0, 100_000.00, 1350.00, step=100.00)
+
+  start = Date(2021, 1)
+  annuity_loan = AnnuityLoan("SPK", -loan_value, loan_rate, p_year=loan_interest_rate, start=start)
+
+  sub_section = st.sidebar.radio("Real Estate Financing Mode", ["Annuity Loan", "Annuitiy Loan + ETF Savings Plan"])
+  # TODO: "Annuity Loan + follow-up" - We need to implement the Chain simulation in the backend first
+
+  if sub_section == "Annuity Loan":
+    plans = [annuity_loan.year_steps(loan_runtime)]
+
+  elif sub_section == "Annuitiy Loan + ETF Savings Plan":
+    with st.beta_container():
+      st.subheader("ETF Savings Options")
+      total_monthly_budget = st.number_input("Total monthly budget", 0.0, 1000_000_000.00, 2_000.00, step=100.00)
+      etf_rate = total_monthly_budget - loan_rate
+
+      st.write(f"Will start with the remaining capital {capital_remaining:_.2f} and use the rate {etf_rate:_.2f}")
+
+      etf_interest_rates = st.multiselect("ETF interest rates", list(range(0,21)), default=list(range(0,10,2)))
+
+      plans = [Parallel("Plan_{:02d}%".format(p),
+                        start=start,
+                        plans=[annuity_loan,
+                               StocksSavingsPlan("ETF", capital_remaining, etf_rate, p_year=p, start=start)],
+                        ).year_steps(loan_runtime)
+               for p in etf_interest_rates]
 
   show_data = st.checkbox("Show raw data table")
 
-  buy_costs = price * buy_costs_rate/100
-  total_price = price + buy_costs
-  loan_value = total_price - eigenkapital
-  capital_remaining = total_capital - eigenkapital
-
-  f"""
-**Total price: {total_price:_.2f}**
-  
-**Buy costs: {buy_costs:_.2f}**
-
-**Loan value: {loan_value:_.2f}**
-
-**Capital remaining: {capital_remaining:_.2f}**
-  """
-
-  start = Date(2021, 1)
-
-  plans = [Parallel("Plan_{:02d}%".format(p),
-                    start=start,
-                    plans=[AnnuityLoan("SPK", -loan_value, loan_rate, p_year=loan_interest_rate, start=start),
-                           StocksSavingsPlan("ETF", capital_remaining, total_monthly_budget-loan_rate, p_year=p, start=start)],
-                   ).year_steps(loan_runtime)
-           for p in etf_interest_rates]
-
   V_keys = ["V_end", "V_net", "rate_cum"]
-  V_keys_default = ["V_end", "V_net"]
-  V_keys_selected = V_keys=st.multiselect("Values to plot", V_keys, default=V_keys)
-  spread_df = get_spread(plans, V_keys_selected)
+  V_keys_default = ["V_net"]
+  V_keys_selected = V_keys=st.multiselect("Values to plot", V_keys, default=V_keys_default)
 
-  for V_key in spread_df.keys():
-    st.header(f"*{V_key}*")
-    st.line_chart(spread_df[V_key])
-    if show_data:
-      st.dataframe(spread_df[V_key].iloc[::-1])
+  show_spread_and_end_distribution(plans, V_keys_selected, show_data)
 
 
 elif section == "Documentation":
