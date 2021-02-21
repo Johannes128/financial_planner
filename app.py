@@ -47,7 +47,7 @@ def show_spread_and_end_distribution(plans, V_keys_selected, show_data=False):
       st.dataframe(spread_df[V_key].iloc[::-1])
 
 
-section = st.sidebar.radio("Section", ["ETF Savings Plan", "Real Estate Financing", "Interest Triangle", "Documentation", "Code"])
+section = st.sidebar.radio("Section", ["ETF Savings Plan", "Real Estate Financing", "ALPHA: Follow-Up Financing", "Interest Triangle", "Documentation", "Code"])
 st.title(section)
 
 disclaimer = "**Disclaimer**: This is work in progress. I do not take any responsibility for the correctness of any provided data. 😅"
@@ -212,6 +212,84 @@ elif section == "Real Estate Financing":
   V_keys_selected = V_keys=st.multiselect("Values to plot", V_keys, default=V_keys_default)
 
   show_spread_and_end_distribution(plans, V_keys_selected, show_data)
+
+
+elif section == "ALPHA: Follow-Up Financing":
+  col1, col2 = st.beta_columns(2)
+  loan_debt = col1.number_input("Start loan debt", 0.0, 1000_000_000.00, 250_000.00, step=5000.00)
+  loan_rate = col2.number_input("Loan rate", 0.0, 1000_000_000.00, 600.00, step=100.00)
+  etf_value = col1.number_input("Start ETF value", 0.0, 1000_000_000.00, 150_000.00, step=5000.00)
+  etf_rate = col2.number_input("ETF rate", 0.0, 1000_000_000.00, 650.00, step=50.00)
+
+  runtime = col1.slider("Runtime", 0, 50, 10, 1)
+  col2.write(f"**Runtime: {runtime} years**")
+
+  loan_interest_rates = st.multiselect("Loan interest rates", list(range(0, 21)), default=list(range(0, 11, 1)))
+  etf_interest_rates = st.multiselect("ETF interest rates", list(range(0, 21)), default=list(range(0, 11, 1)))
+
+  start = Date(2021, 1)
+
+  interest_grid = {"loan_interest_rate": [],
+                   "etf_interest_rate": [],
+                   "loan_value": [],
+                   "etf_V_net": [],
+                   "total_V_net": [],
+                   }
+
+  for loan_interest_rate in loan_interest_rates:
+    for etf_interest_rate in etf_interest_rates:
+      loan = AnnuityLoan("SPK", -loan_debt, loan_rate, p_year=loan_interest_rate, start=start)
+      etf_plan = StocksSavingsPlan("Plan_{:02d}%".format(etf_interest_rate), etf_value, etf_rate, p_year=etf_interest_rate, start=start)
+      plan = Parallel(etf_plan.description,
+                      start=start,
+                      plans=[loan, etf_plan],
+                      ).year_steps(runtime)
+
+      interest_grid["loan_interest_rate"].append(loan_interest_rate)
+      interest_grid["etf_interest_rate"].append(etf_interest_rate)
+      interest_grid["loan_value"].append(loan[-1]["V_end"])
+      interest_grid["etf_V_net"].append(etf_plan[-1]["V_net"])
+      interest_grid["total_V_net"].append(plan[-1]["V_net"])
+
+  interest_grid_df = pd.DataFrame(interest_grid)
+
+  min_V_net, max_V_net = min(interest_grid["total_V_net"]), max(interest_grid["total_V_net"])
+  domain, color_range = [0.0], ["white"]
+  if min_V_net < 0:
+    domain = [min_V_net] + domain
+    color_range = ["red"] + color_range
+  if max_V_net > 0:
+    domain = domain + [max_V_net]
+    color_range = color_range + ["#006600"]
+
+  value_color = alt.Color('total_V_net:Q', scale=alt.Scale(domain=domain,
+                                                           range=color_range,
+                                                           type="linear"))
+
+  interest_grid_chart = alt.Chart(interest_grid_df).mark_rect().encode(
+    x='loan_interest_rate:O',
+    y="etf_interest_rate:O",
+    #color='total_V_net:Q',
+    color=value_color,
+    tooltip=[
+      alt.Tooltip(field="loan_interest_rate", type="quantitative", title="Loan interest rate"),
+      alt.Tooltip(field="etf_interest_rate", type="quantitative", title="ETF interest rate"),
+      alt.Tooltip(field="loan_value", type="quantitative", title="Loan value at end", format=".2f"),
+      alt.Tooltip(field="etf_V_net", type="quantitative", title="ETF V_net at end", format=".2f"),
+      alt.Tooltip(field="total_V_net", type="quantitative", title="Total V_net at end", format=".2f"),
+    ]
+  )
+
+  text = interest_grid_chart.mark_text(baseline='middle', fontSize=8, fontWeight=900).encode(
+    text=alt.Text('total_V_net:Q', format=".1f"),
+    color=alt.value('black'),
+  )
+
+  interest_grid_chart = (interest_grid_chart + text).properties(
+    width=700,
+    height=300
+  )
+  st.write(interest_grid_chart)
 
 
 elif section == "Documentation":
