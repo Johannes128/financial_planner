@@ -227,6 +227,8 @@ elif section == "ALPHA: Follow-Up Financing":
   loan_interest_rates = st.multiselect("Loan interest rates", list(range(0, 21)), default=list(range(0, 11, 1)))
   etf_interest_rates = st.multiselect("ETF interest rates", list(range(0, 21)), default=list(range(0, 11, 1)))
 
+  show_tooltips = st.checkbox("Show tooltips", False)
+
   start = Date(2021, 1)
 
   interest_grid = {"loan_interest_rate": [],
@@ -262,34 +264,62 @@ elif section == "ALPHA: Follow-Up Financing":
     domain = domain + [max_V_net]
     color_range = color_range + ["#006600"]
 
-  value_color = alt.Color('total_V_net:Q', scale=alt.Scale(domain=domain,
-                                                           range=color_range,
-                                                           type="linear"))
+  red_green_scale = alt.Scale(domain=domain,
+                              range=color_range,
+                              type="linear")
+
+  selection_etf_p =  alt.selection_single(on='mouseover', empty='none', fields=['etf_interest_rate'])
+  selection_loan_p = alt.selection_single(on='mouseover', empty='none', fields=['loan_interest_rate'])
 
   interest_grid_chart = alt.Chart(interest_grid_df).mark_rect().encode(
     x='loan_interest_rate:O',
-    y="etf_interest_rate:O",
+    y=alt.Y('etf_interest_rate:O', sort=alt.EncodingSortField('etf_interest_rate', order='descending')),
     #color='total_V_net:Q',
-    color=value_color,
-    tooltip=[
+    color=alt.condition(selection_etf_p|selection_loan_p, alt.value("black"),
+                        alt.Color('total_V_net', scale=red_green_scale)),
+    tooltip=([] if not show_tooltips else [
       alt.Tooltip(field="loan_interest_rate", type="quantitative", title="Loan interest rate"),
       alt.Tooltip(field="etf_interest_rate", type="quantitative", title="ETF interest rate"),
       alt.Tooltip(field="loan_value", type="quantitative", title="Loan value at end", format=".2f"),
       alt.Tooltip(field="etf_V_net", type="quantitative", title="ETF V_net at end", format=".2f"),
       alt.Tooltip(field="total_V_net", type="quantitative", title="Total V_net at end", format=".2f"),
-    ]
+    ])
   )
 
   text = interest_grid_chart.mark_text(baseline='middle', fontSize=8, fontWeight=900).encode(
     text=alt.Text('total_V_net:Q', format=".1f"),
-    color=alt.value('black'),
+    color=alt.condition(selection_etf_p|selection_loan_p, alt.value('#EEEE00'), alt.value('black')),
   )
 
   interest_grid_chart = (interest_grid_chart + text).properties(
     width=700,
     height=300
+  ).add_selection(selection_etf_p).add_selection(selection_loan_p)
+
+  bar_chart_loan_p = alt.Chart(interest_grid_df).mark_bar(size=20).encode(
+    y=alt.Y("total_V_net", scale=alt.Scale(domain=domain[:1] + domain[-1:])),
+    x=alt.X("loan_interest_rate"),
+    color=alt.Color('total_V_net', scale=red_green_scale, legend=None),
+  ).transform_filter(
+    selection_etf_p
+  ).properties(
+    width=350,
+    height=300
   )
-  st.write(interest_grid_chart)
+
+  bar_chart_etf_p = alt.Chart(interest_grid_df).mark_bar(size=20).encode(
+    y=alt.Y("total_V_net", scale=alt.Scale(domain=domain[:1] + domain[-1:])),
+    x=alt.X("etf_interest_rate"),
+    color=alt.Color('total_V_net', scale=red_green_scale, legend=None)
+  ).transform_filter(
+    selection_loan_p
+  ).properties(
+    width=350,
+    height=300
+  )
+
+
+  st.write(interest_grid_chart & (bar_chart_etf_p | bar_chart_loan_p))
 
 
 elif section == "Documentation":
@@ -359,7 +389,7 @@ elif section == "Interest Triangle":
   triangle_cols_df = pd.DataFrame(triangle_cols)
 
   selection = alt.selection_single(on='mouseover', empty='none', fields=['runtime'])
-  selector = alt.selection_single(on="mousemove", empty='all', fields=['runtime'])
+  selector = alt.selection_single(on="mouseover", empty='all', fields=['runtime'])
 
   interest_color = alt.Color('interest:Q', scale=alt.Scale(domain=[-50, -30, -5, 0.0, 5, 15, 50],
                                                            range=["red", "red", "#FFAAAA", "#FFFFFF", "#BBFFBB", "#00AA00", "#006600"],
