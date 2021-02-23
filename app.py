@@ -257,20 +257,24 @@ elif section == "ALPHA: Follow-Up Financing":
   interest_grid_df = pd.DataFrame(interest_grid)
 
   min_V_net, max_V_net = min(interest_grid["total_V_net"]), max(interest_grid["total_V_net"])
+  min_loan_value, max_loan_value = min(interest_grid["loan_value"]), max(interest_grid["loan_value"])
+  min_etf_V_net, max_etf_V_net = min(interest_grid["etf_V_net"]), max(interest_grid["etf_V_net"])
+  min_all, max_all = min(min_V_net, min_loan_value, min_etf_V_net), max(max_V_net, max_loan_value, max_etf_V_net)
+
   domain, color_range = [0.0], ["white"]
-  if min_V_net < 0:
-    domain = [min_V_net] + domain
+  if min_all < 0:
+    domain = [min_all] + domain
     color_range = ["red"] + color_range
-  if max_V_net > 0:
-    domain = domain + [max_V_net]
+  if max_all > 0:
+    domain = domain + [max_all]
     color_range = color_range + ["#006600"]
 
   red_green_scale = alt.Scale(domain=domain,
                               range=color_range,
                               type="linear")
 
-  selection_etf_p =  alt.selection_single(on='mouseover', empty='none', fields=['etf_interest_rate'])
-  selection_loan_p = alt.selection_single(on='mouseover', empty='none', fields=['loan_interest_rate'])
+  selection_etf_p =  alt.selection_single(on='mouseover', empty='all', fields=['etf_interest_rate'])
+  selection_loan_p = alt.selection_single(on='mouseover', empty='all', fields=['loan_interest_rate'])
 
   interest_grid_chart = alt.Chart(interest_grid_df).mark_rect().encode(
     x='loan_interest_rate:O',
@@ -299,28 +303,33 @@ elif section == "ALPHA: Follow-Up Financing":
     height=300
   ).add_selection(selection_etf_p).add_selection(selection_loan_p)
 
-  bar_chart_loan_p = alt.Chart(interest_grid_df).mark_bar(size=20).encode(
-    y=alt.Y("total_V_net", scale=alt.Scale(domain=domain[:1] + domain[-1:])),
-    x=alt.X("loan_interest_rate"),
-    color=alt.Color('total_V_net', scale=red_green_scale, legend=None),
-  ).transform_filter(
-    selection_etf_p
-  ).properties(
-    width=300,
-    height=300
-  )
+  interest_grid_df_melted = pd.melt(interest_grid_df,
+                                    id_vars=["loan_interest_rate", "etf_interest_rate"],
+                                    value_vars=['loan_value', 'etf_V_net', "total_V_net"], var_name='plan',value_name='value')
 
-  bar_chart_etf_p = alt.Chart(interest_grid_df).mark_bar(size=20).encode(
-    y=alt.Y("total_V_net", scale=alt.Scale(domain=domain[:1] + domain[-1:])),
-    x=alt.X("etf_interest_rate"),
-    color=alt.Color('total_V_net', scale=red_green_scale, legend=None)
+  bar_chart_etf_p = alt.Chart(interest_grid_df_melted).mark_bar(size=8).encode(
+    row=alt.Row("etf_interest_rate", spacing=5),
+    x=alt.Y("value", scale=alt.Scale(domain=[min_all, max_all]), stack=None),
+    y=alt.X("plan"),
+    color=alt.Color('value', scale=red_green_scale, legend=None),
   ).transform_filter(
     selection_loan_p
   ).properties(
     width=300,
-    height=300
+    height=24
   )
 
+  bar_chart_loan_p = alt.Chart(interest_grid_df_melted).mark_bar(size=8).encode(
+    column=alt.Column("loan_interest_rate", spacing=5),
+    y=alt.Y("value", scale=alt.Scale(domain=[min_all, max_all]), stack=None),
+    x=alt.X("plan"),
+    color=alt.Color('value', scale=red_green_scale, legend=None),
+  ).transform_filter(
+    selection_etf_p
+  ).properties(
+    width=24,
+    height=10*24 + 9*5
+  )
 
   st.write(interest_grid_chart & (bar_chart_etf_p | bar_chart_loan_p))
 
