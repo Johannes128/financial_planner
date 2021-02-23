@@ -594,7 +594,6 @@ class Parallel(MonthHistory):
     if self.fixed_budget is not None:
       used_rate = sum([0.0] + [entry["rate"] for entry in entries_with_rate])
       rate_for_others = (self.fixed_budget - used_rate) / len(self.histories_without_rate)
-      print(used_rate, rate_for_others)
       for plan in self.histories_without_rate:
         plan.rate_function = ConstantRate(rate_for_others, plan)
       entries_without_rate = [history.month_step(from_month, force_store_additional_info) for history in self.histories_without_rate]
