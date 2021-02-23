@@ -646,12 +646,12 @@ if __name__ == "__main__":
   if True:
     Parallel(
       "parallel plan",
-      start=Month(2020, 1),
-      plans=[AnnuityLoan("SPK", -380_800.00, 1_311.00, p_year=1.15, start=Month(2021, 1)),
-             StocksSavingsPlan("ETF", 57_000.00, 653.00, p_year=5.0, start=Month(2021, 1))],
+      start=Date(2020, 1),
+      plans=[AnnuityLoan("SPK", -380_800.00, 1_311.00, p_year=1.15, start=Date(2021, 1)),
+             StocksSavingsPlan("ETF", 57_000.00, 653.00, p_year=5.0, start=Date(2021, 1))],
     ).year_steps(32).print_years()
     #).year_steps(10).plot()
 
 
   if False:
-    StocksSavingsPlan("savings", 100_000.00, 1100.00, p_year=5.0, start=Month(2020, 1)).year_steps(30).print_years()
+    StocksSavingsPlan("savings", 100_000.00, 1100.00, p_year=5.0, start=Date(2020, 1)).year_steps(30).print_years()
