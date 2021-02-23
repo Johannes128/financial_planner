@@ -436,7 +436,7 @@ elif section == "Interest Triangle":
 
   time_range = min(triangle_cols["start_year"]), max(triangle_cols["sell_year"])
 
-  timeseries_chart = alt.Chart(triangle_cols_df).mark_line().encode(
+  timeseries_chart = alt.Chart(triangle_cols_df).mark_bar(size=10).encode(
     y="interest",
     x=alt.X("sell_year", scale=alt.Scale(domain=time_range), axis=alt.Axis(format='4.0f')),
     color=alt.Color('runtime:O', scale=alt.Scale(scheme='dark2'), legend=alt.Legend(columns=3, symbolLimit=100)),
@@ -460,7 +460,7 @@ elif section == "Interest Triangle":
     color=alt.Color('type:O', scale=alt.Scale(scheme='set1'))
   )
 
-  st.write(final_triangle_chart_chart & (lines + timeseries_chart))
+  st.write(final_triangle_chart_chart & (timeseries_chart + lines))
 
 
 elif section == "Code":
