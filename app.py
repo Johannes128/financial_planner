@@ -274,9 +274,10 @@ elif section == "ALPHA: Follow-Up Financing":
   interest_grid_chart = alt.Chart(interest_grid_df).mark_rect().encode(
     x='loan_interest_rate:O',
     y=alt.Y('etf_interest_rate:O', sort=alt.EncodingSortField('etf_interest_rate', order='descending')),
-    #color='total_V_net:Q',
-    color=alt.condition(selection_etf_p|selection_loan_p, alt.value("black"),
-                        alt.Color('total_V_net', scale=red_green_scale)),
+    color='total_V_net:Q',
+    #color=alt.condition(selection_etf_p|selection_loan_p, alt.value("black"),
+    #                    alt.Color('total_V_net', scale=red_green_scale)),
+    opacity=alt.condition(selection_etf_p|selection_loan_p, alt.value(0.6), alt.value(1.0)),
     tooltip=([] if not show_tooltips else [
       alt.Tooltip(field="loan_interest_rate", type="quantitative", title="Loan interest rate"),
       alt.Tooltip(field="etf_interest_rate", type="quantitative", title="ETF interest rate"),
@@ -288,7 +289,8 @@ elif section == "ALPHA: Follow-Up Financing":
 
   text = interest_grid_chart.mark_text(baseline='middle', fontSize=8, fontWeight=900).encode(
     text=alt.Text('total_V_net:Q', format=".1f"),
-    color=alt.condition(selection_etf_p|selection_loan_p, alt.value('#EEEE00'), alt.value('black')),
+    #color=alt.condition(selection_etf_p|selection_loan_p, alt.value('#EEEE00'), alt.value('black')),
+    color=alt.value("black")
   )
 
   interest_grid_chart = (interest_grid_chart + text).properties(
@@ -397,7 +399,9 @@ elif section == "Interest Triangle":
   triangle_chart = alt.Chart(triangle_cols_df).mark_rect().encode(
     x='sell_year:O',
     y=alt.Y('start_year:O', sort=alt.EncodingSortField('start_year', order='descending'), axis=alt.Axis(orient='right')),
-    color=alt.condition(selection, alt.value("black"), interest_color),
+    #color=alt.condition(selection, alt.value("black"), interest_color),
+    color=interest_color,
+    opacity=alt.condition(selection, alt.value(0.5), alt.value(1.0)),
     tooltip=[
       alt.Tooltip(field="start_year", type="quantitative", title="Start Year"),
       alt.Tooltip(field="sell_year", type="quantitative", title="Sell Year"),
@@ -408,7 +412,8 @@ elif section == "Interest Triangle":
 
   text = triangle_chart.mark_text(baseline='middle', fontSize=8, fontWeight=900).encode(
     text=alt.Text('interest:Q', format=".1f"),
-    color=alt.condition(selection, alt.value('#EEEE00'), alt.value('black')),
+    #color=alt.condition(selection, alt.value('#EEEE00'), alt.value('black')),
+    color=alt.value("black")
   )
 
   size_factor = (end_year-start_year)/50
@@ -424,7 +429,7 @@ elif section == "Interest Triangle":
   timeseries_chart = alt.Chart(triangle_cols_df).mark_line().encode(
     y="interest",
     x=alt.X("sell_year", scale=alt.Scale(domain=time_range), axis=alt.Axis(format='4.0f')),
-    color=alt.Color('runtime:O', scale=alt.Scale(scheme='dark2'), legend=alt.Legend(columns=3, symbolLimit=100))
+    color=alt.Color('runtime:O', scale=alt.Scale(scheme='dark2'), legend=alt.Legend(columns=3, symbolLimit=100)),
   ).transform_filter(
     selector
   ).properties(
