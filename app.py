@@ -217,9 +217,9 @@ elif section == "Real Estate Financing":
 elif section == "ALPHA: Follow-Up Financing":
   col1, col2 = st.beta_columns(2)
   loan_debt = col1.number_input("Start loan debt", 0.0, 1000_000_000.00, 250_000.00, step=5000.00)
-  loan_rate = col2.number_input("Loan rate", 0.0, 1000_000_000.00, 600.00, step=100.00)
+  loan_rate = col2.number_input("Loan rate", 0.0, 1000_000_000.00, 1350.00, step=100.00)
   etf_value = col1.number_input("Start ETF value", 0.0, 1000_000_000.00, 150_000.00, step=5000.00)
-  etf_rate = col2.number_input("ETF rate", 0.0, 1000_000_000.00, 650.00, step=50.00)
+  total_monthly_rate = col2.number_input("Total monthly rate", loan_rate, 1000_000_000.00, max(1500.00, loan_rate), step=50.00)
 
   runtime = col1.slider("Runtime", 0, 50, 10, 1)
   col2.write(f"**Runtime: {runtime} years**")
@@ -241,10 +241,11 @@ elif section == "ALPHA: Follow-Up Financing":
   for loan_interest_rate in loan_interest_rates:
     for etf_interest_rate in etf_interest_rates:
       loan = AnnuityLoan("SPK", -loan_debt, loan_rate, p_year=loan_interest_rate, start=start)
-      etf_plan = StocksSavingsPlan("Plan_{:02d}%".format(etf_interest_rate), etf_value, etf_rate, p_year=etf_interest_rate, start=start)
+      etf_plan = StocksSavingsPlan("Plan_{:02d}%".format(etf_interest_rate), etf_value, None, p_year=etf_interest_rate, start=start)
       plan = Parallel(etf_plan.description,
                       start=start,
                       plans=[loan, etf_plan],
+                      fixed_budget=total_monthly_rate
                       ).year_steps(runtime)
 
       interest_grid["loan_interest_rate"].append(loan_interest_rate)
@@ -305,7 +306,7 @@ elif section == "ALPHA: Follow-Up Financing":
   ).transform_filter(
     selection_etf_p
   ).properties(
-    width=350,
+    width=300,
     height=300
   )
 
@@ -316,7 +317,7 @@ elif section == "ALPHA: Follow-Up Financing":
   ).transform_filter(
     selection_loan_p
   ).properties(
-    width=350,
+    width=300,
     height=300
   )
 
