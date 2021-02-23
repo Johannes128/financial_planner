@@ -159,6 +159,8 @@ class MonthHistory(list):
       self.rate_function = ConstantRate(rate, self)
     elif isinstance(rate, Rate):
       self.rate_function = rate
+    else:
+      self.rate_function = None
 
     if start is not None:
       self.restart(start)
@@ -544,7 +546,7 @@ class Chain(MonthHistory):
 
 
 class Parallel(MonthHistory):
-  def __init__(self, description, start=None, plans=None):
+  def __init__(self, description, start=None, plans=None, fixed_budget=None):
     desc_counts = collections.Counter([plan.description for plan in plans])
     for desc, count in desc_counts.items():
       if count > 1:
@@ -553,6 +555,13 @@ class Parallel(MonthHistory):
     super().__init__(description, None, start) # TODO: is rate=None a good idea?
     self.description = description
     self.histories = (plans if plans is not None else [])
+
+    self.histories_with_rate = [history for history in self.histories if history.rate_function is not None]
+    self.histories_without_rate = [history for history in self.histories if history.rate_function is None]
+
+    self.fixed_budget = fixed_budget
+    if fixed_budget is None and self.histories_without_rate:
+      raise ValueError("Plans without rate only possible when fixed_budget is set.")
 
     history_starts = [history.start for history in self.histories]
     set_history_starts = [history_start for history_start in history_starts if history_start is not None]
@@ -580,7 +589,19 @@ class Parallel(MonthHistory):
       history.clear()
 
   def month_step(self, from_month, force_store_additional_info=False):
-    entries = [history.month_step(from_month, force_store_additional_info) for history in self.histories]
+    entries_with_rate = [history.month_step(from_month, force_store_additional_info) for history in self.histories_with_rate]
+
+    if self.fixed_budget is not None:
+      used_rate = sum([0.0] + [entry["rate"] for entry in entries_with_rate])
+      rate_for_others = (self.fixed_budget - used_rate) / len(self.histories_without_rate)
+      print(used_rate, rate_for_others)
+      for plan in self.histories_without_rate:
+        plan.rate_function = ConstantRate(rate_for_others, plan)
+      entries_without_rate = [history.month_step(from_month, force_store_additional_info) for history in self.histories_without_rate]
+      entries = entries_with_rate + entries_without_rate
+    else:
+      entries = entries_with_rate
+
     entries = [entry for entry in entries if entry is not None]
     self.finished = all(history.finished for history in self.histories)
     if entries:
