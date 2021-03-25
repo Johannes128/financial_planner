@@ -64,7 +64,7 @@ if section == "ETF Savings Plan":
   tax_variant = col1.selectbox("Tax Variant", tax_variants, index=tax_variants.index("married"))
   #basis_tax_rate = col2.number_input("Basis Tax Rate [%]", 0.0, 50.0, 0.5, step=0.1)
 
-  etf_mode = st.radio("Interest Mode", ["Fixed Interest Rate", "Historical Performance"])
+  etf_mode = st.radio("Interest Mode", ["Historical Performance", "Fixed Interest Rate"])
   if etf_mode == "Fixed Interest Rate":
     r"""
 This mode simulates a stocks savings plan respecting German tax laws for different average interest rates.
