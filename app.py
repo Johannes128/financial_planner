@@ -158,12 +158,12 @@ elif section == "Real Estate Financing":
     loan_rate = col2.number_input("Loan monthly rate", 0.0, 100_000.00, 1350.00, step=100.00)
 
   start = Date(2021, 1)
-  annuity_loan = AnnuityLoan("SPK", -loan_value, loan_rate, p_year=loan_interest_rate, start=start)
 
   sub_section = st.sidebar.radio("Real Estate Financing Mode", ["Annuity Loan", "Annuitiy Loan + ETF Savings Plan"])
   # TODO: "Annuity Loan + follow-up" - We need to implement the Chain simulation in the backend first
 
   if sub_section == "Annuity Loan":
+    annuity_loan = AnnuityLoan("SPK", -loan_value, loan_rate, p_year=loan_interest_rate, start=start)
     plans = [annuity_loan.year_steps(loan_runtime)]
 
   elif sub_section == "Annuitiy Loan + ETF Savings Plan":
@@ -177,9 +177,9 @@ elif section == "Real Estate Financing":
       etf_mode = st.radio("Interest Mode", ["Fixed Interest Rate", "Historical Performance"])
       if etf_mode == "Fixed Interest Rate":
         etf_interest_rates = st.multiselect("ETF interest rates", list(range(0,21)), default=list(range(0,10,2)))
-        etf_plans = [StocksSavingsPlan("Plan_{:02d}%".format(p), capital_remaining, etf_rate, p_year=p, start=start) for p in etf_interest_rates]
+        etf_plans = [StocksSavingsPlan("Plan_{:02d}%".format(p), capital_remaining, None, p_year=p, start=start) for p in etf_interest_rates]
 
-        annuity_loans = [annuity_loan] * len(etf_plans)
+        annuity_loans = [AnnuityLoan("SPK", -loan_value, loan_rate, p_year=loan_interest_rate, start=start) for _ in etf_plans]
         start_times = [start] * len(etf_plans)
 
       elif etf_mode == "Historical Performance":
@@ -202,12 +202,13 @@ elif section == "Real Estate Financing":
                         start=s,
                         plans=[annuity_loan,
                                etf_plan],
+                        fixed_budget=total_monthly_budget
                         ).year_steps(loan_runtime)
                for s, annuity_loan, etf_plan in zip(start_times, annuity_loans, etf_plans)]
 
   show_data = st.checkbox("Show raw data table")
 
-  V_keys = ["V_end", "V_net", "rate_cum"]
+  V_keys = ["V_end", "V_net", "rate_cum", "rate"]
   V_keys_default = ["V_net"]
   V_keys_selected = V_keys=st.multiselect("Values to plot", V_keys, default=V_keys_default)
 
