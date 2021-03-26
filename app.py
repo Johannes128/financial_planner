@@ -177,7 +177,7 @@ elif section == "Real Estate Financing":
       etf_mode = st.radio("Interest Mode", ["Fixed Interest Rate", "Historical Performance"])
       if etf_mode == "Fixed Interest Rate":
         etf_interest_rates = st.multiselect("ETF interest rates", list(range(0,21)), default=list(range(0,10,2)))
-        etf_plans = [StocksSavingsPlan("Plan_{:02d}%".format(p), capital_remaining, None, p_year=p, start=start) for p in etf_interest_rates]
+        etf_plans = [StocksSavingsPlan("ETF_{:02d}%".format(p), capital_remaining, None, p_year=p, start=start) for p in etf_interest_rates]
 
         annuity_loans = [AnnuityLoan("SPK", -loan_value, loan_rate, p_year=loan_interest_rate, start=start) for _ in etf_plans]
         start_times = [start] * len(etf_plans)
@@ -198,7 +198,7 @@ elif section == "Real Estate Financing":
         etf_plans = [StocksSavingsPlanDataBased(f"ETF_{s.year:04d}-{s.month:02d}", capital_remaining, etf_rate, start=s, tax_info=tax_variant)
                      for s in start_times]
 
-      plans = [Parallel(etf_plan.description,
+      plans = [Parallel(etf_plan.description.replace("ETF", "Pll"),
                         start=s,
                         plans=[annuity_loan,
                                etf_plan],
