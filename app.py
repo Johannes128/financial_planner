@@ -154,7 +154,7 @@ elif section == "Real Estate Financing":
     st.subheader("Loan Parameters")
     col1, col2, col3 = st.beta_columns(3)
     loan_interest_rate = col3.number_input("Loan interest rate", 0.0, 100.00, 1.1, step=0.1)
-    loan_runtime = col1.number_input("Loan run time", 5, 50, 20, step=5)
+    loan_runtime = col1.number_input("Loan run time", 5, 100, 20, step=5)
     loan_rate = col2.number_input("Loan monthly rate", 0.0, 100_000.00, 1350.00, step=100.00)
 
   start = Date(2021, 1)
